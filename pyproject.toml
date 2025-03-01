@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hyperblend"
+version = "0.1.0"
+authors = [
+  { name="HyperBlend Contributors" },
+]
+description = "Advanced botanical medicine analysis using hypergraph networks"
+readme = "README.md"
+requires-python = ">=3.8"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "networkx>=3.0",
+    "pydantic>=2.0",
+    "numpy>=1.20",
+    "pandas>=1.5",
+    "scipy>=1.8"
+]
+
+[project.urls]
+"Homepage" = "https://github.com/yourusername/hyperblend"
+"Bug Tracker" = "https://github.com/yourusername/hyperblend/issues" 

@@ -1,0 +1,387 @@
+{
+  "mesembrine": {
+    "current": {
+      "id": "mesembrine",
+      "name": "Mesembrine",
+      "molecular_formula": "C17H23NO3",
+      "molecular_weight": 289.37,
+      "smiles": "CN1CC2CC3=C(C1)C=C(OC)C(=O)C3=CC2",
+      "pubchem_id": "394162",
+      "description": "Primary alkaloid from Sceletium tortuosum, potent SERT inhibitor (Ki 1.4 nM)"
+    },
+    "verified": {
+      "pubchem_id": "394162",
+      "chembl_id": null,
+      "molecular_formula": "C17H23NO3",
+      "molecular_weight": 289.4,
+      "smiles": "CN1CCC2(C1CC(=O)CC2)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "(3aS,7aS)-3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,4,5,7,7a-hexahydroindol-6-one",
+      "source": "PubChem",
+      "xlogp": 2.0,
+      "synonyms": [
+        "Mesembrine",
+        "(-)-Mesembrine",
+        "Mesembranone",
+        "Mesembrin",
+        "(-)-Mesembranone",
+        "24880-43-1",
+        "Mesembrine [MI]",
+        "Mesembrine, (-)-",
+        "DL-Mesembrine",
+        "(+/-)-Mesembrine",
+        "(+/-)-Mesembranone",
+        "4alpha,9alpha-Mesembrine",
+        "Mesembrine, (+/-)-",
+        "86E2ZU4ETY",
+        "(3aS,7aS)-3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,4,5,7,7a-hexahydroindol-6-one",
+        "4.alpha.,9.alpha.-Mesembrine",
+        "Mesembrine (+/-)-form [MI]",
+        "6023-73-0",
+        "CHEBI:6778",
+        "DTXSID50947774",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)octahydro-1-methyl-, cis-",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)octahydro-1-methyl-, (3aS,7aS)-",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)octahydro-1-methyl-, (3as-cis)-",
+        "423182RCI5",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)octahydro-1-methyl-, (3aR,7aR)-rel-",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)octahydro-1-methyl-, cis-(+/-)-",
+        "AC1Q4FEO",
+        "UNII-86E2ZU4ETY",
+        "AC1L97PM",
+        "UNII-423182RCI5",
+        "SureCN225652",
+        "3a-(3,4-Dimethoxyphenyl)octahydro-1-methyl-6H-indol-6-one",
+        "SCHEMBL225652",
+        "CHEMBL2008762",
+        "DAHIQPJTGIHDGO-IRXDYDNUSA-N",
+        "DTXCID601376026",
+        "AKOS040748905",
+        "NCI60_034735",
+        "HY-117526",
+        "CS-0066385",
+        "C09224",
+        "(3aS*,7aS*)-3a-(3,4-dimethoxyphenyl) 1-methyloctahydro-6H-indol-6-one",
+        "(3aS*,7aS*)-3a-(3,4-dimethoxyphenyl)-1-methyloctahydro-6H-indol-6-one",
+        "972-717-5"
+      ]
+    }
+  },
+  "mesembrenone": {
+    "current": {
+      "id": "mesembrenone",
+      "name": "Mesembrenone",
+      "molecular_formula": "C17H21NO3",
+      "molecular_weight": 287.35,
+      "smiles": "CN1CC2CC3=C(C1)C=C(OC)C(=O)C3=CC2=O",
+      "pubchem_id": "216272",
+      "description": "Potent PDE4 inhibitor from Sceletium tortuosum"
+    },
+    "verified": {
+      "pubchem_id": "216272",
+      "chembl_id": null,
+      "molecular_formula": "C17H21NO3",
+      "molecular_weight": 287.35,
+      "smiles": "CN1CCC2(C1CC(=O)C=C2)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "(3aR,7aS)-3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,7,7a-tetrahydroindol-6-one",
+      "source": "PubChem",
+      "xlogp": 2.2,
+      "synonyms": [
+        "Mesembrenone",
+        "468-54-2",
+        "(+)-Mesembrenone",
+        "Mesembrenone, (+)-",
+        "(3aR,7aS)-3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,7,7a-tetrahydroindol-6-one",
+        "HT8JNS8E79",
+        "CHEMBL4781238",
+        "C09223",
+        "(3aR,7aS)-3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,3a,6,7,7a-hexahydro-1H-indol-6-one",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)-1,2,3,3a,7,7a-hexahydro-1-methyl-, (3aR-cis)-",
+        "AC1L50EL",
+        "(+)-Mesembrenine",
+        "SureCN226088",
+        "UNII-HT8JNS8E79",
+        "SCHEMBL226088",
+        "CHEBI:6777",
+        "DTXSID60963667",
+        "BDBM50559715",
+        "AKOS040744433",
+        "3a-(3,4-Dimethoxyphenyl)-1,2,3,3a,7,7a-hexahydro-1-methyl-6H-indol-6-one (3aR-cis)-",
+        "DA-65349",
+        "HY-124434",
+        "CS-0086461",
+        "Q6821189",
+        "(3aR,7aS)-3a-(3,4-dimethoxyphenyl)-1-methyl-1,2,3,3a,7,7a-hexahydro-6H-indol-6-one",
+        "(3AR,7AS)-3A-(3,4-DIMETHOXYPHENYL)-1,2,3,3A,7,7A-HEXAHYDRO-1-METHYL-6H-INDOL-6-ONE",
+        "6H-Indol-6-one, 3a-(3,4-dimethoxyphenyl)-1,2,3,3a,7,7a-hexahydro-1-methyl-, (3aR,7aS)-"
+      ]
+    }
+  },
+  "mesembrenol": {
+    "current": {
+      "id": "mesembrenol",
+      "name": "Mesembrenol",
+      "molecular_formula": "C17H23NO3",
+      "molecular_weight": 289.37,
+      "smiles": "CN1CC2CC3=C(C1)C=C(OC)C(O)C3=CC2",
+      "pubchem_id": "46898090",
+      "description": "Alkaloid from Sceletium tortuosum"
+    },
+    "verified": {
+      "pubchem_id": "46898090",
+      "chembl_id": null,
+      "molecular_formula": "C17H23NO3",
+      "molecular_weight": 289.4,
+      "smiles": "CN1CCC2(C1CC(C=C2)O)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "3a-(3,4-dimethoxyphenyl)-1-methyl-3,6,7,7a-tetrahydro-2H-indol-6-ol",
+      "source": "PubChem",
+      "xlogp": 2.3,
+      "synonyms": [
+        "Mesembrenol",
+        "25516-15-8",
+        "3a-(3,4-dimethoxyphenyl)-1-methyl-3,6,7,7a-tetrahydro-2H-indol-6-ol",
+        "SCHEMBL22198068",
+        "DA-75427"
+      ]
+    }
+  },
+  "mesembranol": {
+    "current": {
+      "id": "mesembranol",
+      "name": "Mesembranol",
+      "molecular_formula": "C17H25NO3",
+      "molecular_weight": 291.39,
+      "smiles": "CN1CC2CC3=C(C1)C=C(OC)C(O)C3CC2",
+      "pubchem_id": "625909",
+      "description": "Alkaloid from Sceletium tortuosum"
+    },
+    "verified": {
+      "pubchem_id": "625909",
+      "chembl_id": null,
+      "molecular_formula": "C17H25NO3",
+      "molecular_weight": 291.4,
+      "smiles": "CN1CCC2(C1CC(CC2)O)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "3a-(3,4-dimethoxyphenyl)-1-methyl-3,4,5,6,7,7a-hexahydro-2H-indol-6-ol",
+      "source": "PubChem",
+      "xlogp": 2.4,
+      "synonyms": [
+        "Mesembranol",
+        "SCHEMBL22198069",
+        "KPMLOZVRLWHOBN-UHFFFAOYSA-N",
+        "3a-(3,4-dimethoxyphenyl)-1-methyl-3,4,5,6,7,7a-hexahydro-2H-indol-6-ol",
+        "Q15426191",
+        "3a-(3,4-Dimethoxyphenyl)-1-methyloctahydro-1H-indol-6-ol #"
+      ]
+    }
+  },
+  "delta7_mesembrine": {
+    "current": {
+      "id": "delta7_mesembrine",
+      "name": "\u03947-Mesembrine",
+      "molecular_formula": "C17H21NO3",
+      "molecular_weight": 287.35,
+      "description": "Alkaloid from Sceletium tortuosum, mesembrine-type"
+    },
+    "verified": {
+      "pubchem_id": null,
+      "chembl_id": null,
+      "molecular_formula": null,
+      "molecular_weight": null,
+      "smiles": null,
+      "iupac_name": null,
+      "source": null,
+      "xlogp": null,
+      "synonyms": null
+    }
+  },
+  "delta7_mesembrenone": {
+    "current": {
+      "id": "delta7_mesembrenone",
+      "name": "\u03947-Mesembrenone",
+      "molecular_formula": "C17H19NO3",
+      "molecular_weight": 285.34,
+      "pubchem_id": "11077036",
+      "description": "Alkaloid from Sceletium tortuosum, mesembrine-type"
+    },
+    "verified": {
+      "pubchem_id": "11077036",
+      "chembl_id": null,
+      "molecular_formula": "C17H21NO3",
+      "molecular_weight": 287.35,
+      "smiles": "CN1CCC2(C1=CC(=O)CC2)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,4,5-tetrahydroindol-6-one",
+      "source": "PubChem",
+      "xlogp": 2.3,
+      "synonyms": [
+        "D7-Mesembrenone",
+        "35714-44-4",
+        "3a-(3,4-dimethoxyphenyl)-1-methyl-2,3,4,5-tetrahydroindol-6-one",
+        "SCHEMBL19935167",
+        "CHEBI:181072",
+        "DTXSID501151685",
+        "AKOS040735014",
+        "NCGC00385278-01",
+        "NS00097359",
+        "3a-(3,4-Dimethoxyphenyl)-1,2,3,3a,4,5-hexahydro-1-methyl-6H-indol-6-one",
+        "3a-(3,4-Dimethoxyphenyl)-1-methyl-1,2,3,3a,4,5-hexahydro-6H-indol-6-one"
+      ]
+    }
+  },
+  "epimesembranol": {
+    "current": {
+      "id": "epimesembranol",
+      "name": "Epimesembranol",
+      "molecular_formula": "C17H25NO3",
+      "molecular_weight": 291.39,
+      "description": "Alkaloid from Sceletium tortuosum, mesembrine-type"
+    },
+    "verified": {
+      "pubchem_id": null,
+      "chembl_id": null,
+      "molecular_formula": null,
+      "molecular_weight": null,
+      "smiles": null,
+      "iupac_name": null,
+      "source": null,
+      "xlogp": null,
+      "synonyms": null
+    }
+  },
+  "epimesembrenol": {
+    "current": {
+      "id": "epimesembrenol",
+      "name": "Epimesembrenol",
+      "molecular_formula": "C17H23NO3",
+      "molecular_weight": 289.37,
+      "description": "Alkaloid from Sceletium tortuosum, mesembrine-type"
+    },
+    "verified": {
+      "pubchem_id": null,
+      "chembl_id": null,
+      "molecular_formula": null,
+      "molecular_weight": null,
+      "smiles": null,
+      "iupac_name": null,
+      "source": null,
+      "xlogp": null,
+      "synonyms": null
+    }
+  },
+  "mesembrane": {
+    "current": {
+      "id": "mesembrane",
+      "name": "Mesembrane",
+      "molecular_formula": "C17H25NO2",
+      "molecular_weight": 275.39,
+      "pubchem_id": "10989483",
+      "description": "Alkaloid from Sceletium tortuosum, mesembrine-type"
+    },
+    "verified": {
+      "pubchem_id": "10989483",
+      "chembl_id": null,
+      "molecular_formula": "C17H25NO2",
+      "molecular_weight": 275.4,
+      "smiles": "CN1CCC2(C1CCCC2)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "(3aR,7aR)-3a-(3,4-dimethoxyphenyl)-1-methyl-3,4,5,6,7,7a-hexahydro-2H-indole",
+      "source": "PubChem",
+      "xlogp": 3.5,
+      "synonyms": [
+        "Mesembrane",
+        "(3aR,7aR)-3a-(3,4-dimethoxyphenyl)-1-methyl-3,4,5,6,7,7a-hexahydro-2H-indole"
+      ]
+    }
+  },
+  "tortuosamine": {
+    "current": {
+      "id": "tortuosamine",
+      "name": "Tortuosamine",
+      "molecular_formula": "C17H25NO2",
+      "molecular_weight": 275.39,
+      "smiles": "CN1CC2CC3=C(C1)C=C(OC)CC3CC2",
+      "pubchem_id": "101324747",
+      "description": "Alkaloid from Sceletium tortuosum, tortuosamine-type"
+    },
+    "verified": {
+      "pubchem_id": "101324747",
+      "chembl_id": null,
+      "molecular_formula": "C20H26N2O2",
+      "molecular_weight": 326.4,
+      "smiles": "CNCCC1(CCC2=C(C1)C=CC=N2)C3=CC(=C(C=C3)OC)OC",
+      "iupac_name": "2-[(6R)-6-(3,4-dimethoxyphenyl)-7,8-dihydro-5H-quinolin-6-yl]-N-methylethanamine",
+      "source": "PubChem",
+      "xlogp": 3.2,
+      "synonyms": [
+        "Tortuosamine, (-)-",
+        "G4T9Z3RXX9",
+        "Tortuosamine",
+        "UNII-G4T9Z3RXX9",
+        "35722-04-4",
+        "(6R)-6-(3,4-Dimethoxyphenyl)-5,6,7,8-tetrahydro-N-methyl-6-quinolineethanamine",
+        "6-Quinolineethanamine, 6-(3,4-dimethoxyphenyl)-5,6,7,8-tetrahydro-N-methyl-, (6R)-",
+        "6-Quinolineethanamine, 6-(3,4-dimethoxyphenyl)-5,6,7,8-tetrahydro-N-methyl-, (R)-",
+        "DTXSID201045657"
+      ]
+    }
+  },
+  "channaine": {
+    "current": {
+      "id": "channaine",
+      "name": "Channaine",
+      "pubchem_id": "51136501",
+      "description": "Recently discovered alkaloid from Sceletium tortuosum (reported in 2018)"
+    },
+    "verified": {
+      "pubchem_id": "51136501",
+      "chembl_id": null,
+      "molecular_formula": "C32H38N2O6",
+      "molecular_weight": 546.7,
+      "smiles": "COC1=C(C=C(C=C1)C23CCNC2CC45C(=C3)C6CC(O4)(CC7C6(CCN57)C8=CC(=C(C=C8)OC)OC)O)OC",
+      "iupac_name": "7,15-bis(3,4-dimethoxyphenyl)-19-oxa-4,18-diazahexacyclo[10.6.1.01,9.03,7.010,15.014,18]nonadec-8-en-12-ol",
+      "source": "PubChem",
+      "xlogp": 3.1,
+      "synonyms": [
+        "Channaine",
+        "1355-47-1",
+        "7,15-bis(3,4-dimethoxyphenyl)-19-oxa-4,18-diazahexacyclo[10.6.1.01,9.03,7.010,15.014,18]nonadec-8-en-12-ol",
+        "CHEBI:181851",
+        "AKOS040735956",
+        "NCGC00347505-02!"
+      ]
+    }
+  },
+  "sceletorine_a": {
+    "current": {
+      "id": "sceletorine_a",
+      "name": "Sceletorine A",
+      "description": "Recently discovered alkaloid from Sceletium tortuosum (identified in 2019)"
+    },
+    "verified": {
+      "pubchem_id": null,
+      "chembl_id": null,
+      "molecular_formula": null,
+      "molecular_weight": null,
+      "smiles": null,
+      "iupac_name": null,
+      "source": null,
+      "xlogp": null,
+      "synonyms": null
+    }
+  },
+  "sceletorine_b": {
+    "current": {
+      "id": "sceletorine_b",
+      "name": "Sceletorine B",
+      "description": "Recently discovered alkaloid from Sceletium tortuosum (identified in 2019)"
+    },
+    "verified": {
+      "pubchem_id": null,
+      "chembl_id": null,
+      "molecular_formula": null,
+      "molecular_weight": null,
+      "smiles": null,
+      "iupac_name": null,
+      "source": null,
+      "xlogp": null,
+      "synonyms": null
+    }
+  }
+}
