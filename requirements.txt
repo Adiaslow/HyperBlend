@@ -1,15 +1,25 @@
-fastapi==0.109.2
-uvicorn==0.27.1
-sqlalchemy==2.0.27
-aiosqlite==0.19.0
-pydantic==2.6.1
-pydantic-settings==2.1.0
-networkx==3.2.1
-pytest==8.0.1
-pytest-asyncio==0.23.5
-httpx==0.26.0
-python-multipart==0.0.9
-python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
-rdkit==2023.9.5
-chembl-webresource-client==0.10.8 
+# Core dependencies
+flask>=3.0.0
+flask-cors>=4.0.0
+neo4j>=5.14.0
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+requests>=2.31.0
+beautifulsoup4>=4.12.0
+
+# API and data processing
+pandas>=2.1.0
+numpy>=1.24.0
+biopython>=1.83
+rdkit>=2023.9.0
+
+# Frontend dependencies
+flask-assets>=2.1.0
+
+# Development dependencies
+pytest>=7.4.0
+black>=23.12.0
+isort>=5.13.0
+flake8>=7.0.0
+mypy>=1.8.0
+pytest-cov>=4.1.0 

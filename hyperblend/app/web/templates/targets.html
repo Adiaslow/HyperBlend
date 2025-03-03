@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}Targets - HyperBlend{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">Biological Targets</h1>
+    
+    <!-- Search Bar -->
+    <div class="mb-6">
+        <input type="text" id="searchInput" 
+               class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+               placeholder="Search targets...">
+    </div>
+
+    <!-- Targets List -->
+    <div id="targetsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Targets will be dynamically added here -->
+    </div>
+</div>
+
+<!-- Target Template -->
+<template id="targetTemplate">
+    <div class="target-card bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+        <h3 class="text-xl font-semibold mb-2"></h3>
+        <div class="text-sm text-gray-600 mb-2">
+            <p class="mb-1">Type: <span class="type"></span></p>
+            <p class="mb-1">Family: <span class="family"></span></p>
+            <p class="mb-1">Compounds: <span class="compound-count"></span></p>
+        </div>
+        <p class="text-sm text-gray-700 description line-clamp-3"></p>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const targetsList = document.getElementById('targetsList');
+    const targetTemplate = document.getElementById('targetTemplate');
+
+    // Load initial targets
+    loadTargets();
+
+    // Search functionality
+    let debounceTimer;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            loadTargets(this.value);
+        }, 300);
+    });
+
+    async function loadTargets(query = '') {
+        try {
+            const response = await fetch(`/api/targets?q=${encodeURIComponent(query)}`);
+            const targets = await response.json();
+            
+            targetsList.innerHTML = '';
+            targets.forEach(target => {
+                const card = targetTemplate.content.cloneNode(true);
+                
+                card.querySelector('h3').textContent = target.name;
+                card.querySelector('.type').textContent = target.type || 'N/A';
+                card.querySelector('.family').textContent = target.family || 'N/A';
+                card.querySelector('.compound-count').textContent = target.compound_count || '0';
+                card.querySelector('.description').textContent = target.description || 'No description available';
+                
+                targetsList.appendChild(card);
+            });
+        } catch (error) {
+            console.error('Error loading targets:', error);
+        }
+    }
+});
+</script>
+{% endblock %} 

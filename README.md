@@ -1,14 +1,29 @@
 # HyperBlend
 
-A chemical compound analysis and visualization platform that integrates data from PubChem and ChEMBL.
+HyperBlend is a powerful tool for analyzing natural compounds, their sources, and biological targets. It provides an interactive graph-based interface for exploring relationships between compounds, natural sources (plants, fungi, etc.), and biological targets.
 
 ## Features
 
-- Compound management with data from PubChem and ChEMBL
-- Source tracking (plants, fungi, etc.)
-- Biological target analysis
-- Graph-based relationship visualization
-- REST API for data access and management
+- Interactive force-directed graph visualization
+- Search across multiple scientific databases
+- Real-time data retrieval and updates
+- Detailed information panels
+- Subgraph visualization for related entities
+- Support for various data sources:
+  - PubChem
+  - ChemSpider
+  - ChEMBL
+  - ChEBI
+  - DrugBank
+  - UniProt
+  - RCSB
+  - STITCH
+  - KNApSAcK
+  - NPASS
+  - TCMSP
+  - UNPD
+  - LOTUS
+  - COCONUT
 
 ## Installation
 
@@ -19,7 +34,7 @@ git clone https://github.com/yourusername/hyperblend.git
 cd hyperblend
 ```
 
-2. Create a virtual environment and activate it:
+2. Create and activate a virtual environment:
 
 ```bash
 python -m venv venv
@@ -32,70 +47,90 @@ source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
-## Development Setup
-
-1. Set up the database:
+4. Set up environment variables:
 
 ```bash
-# The database will be automatically created on first run
+cp .env.example .env
+# Edit .env with your configuration
 ```
 
-2. Run the development server:
+5. Set up Neo4j:
+
+- Install Neo4j Community Edition
+- Create a new database
+- Update the connection details in .env
+
+## Usage
+
+1. Start the Flask development server:
 
 ```bash
-uvicorn hyperblend.web.api:app --reload
+flask run
 ```
 
-3. Access the API documentation:
+2. Open your browser and navigate to `http://localhost:5000`
 
-- OpenAPI UI: http://localhost:8000/docs
-- ReDoc: http://localhost:8000/redoc
+3. Use the search bar to find compounds, sources, or targets
 
-## Testing
+4. Click on nodes in the graph to view detailed information
 
-Run the test suite:
-
-```bash
-pytest
-```
-
-Run tests with coverage:
-
-```bash
-pytest --cov=hyperblend tests/
-```
+5. Use the sidebar to explore related entities
 
 ## Project Structure
 
 ```
 hyperblend/
-├── domain/             # Domain models and business logic
-│   ├── models/        # Core domain models
-│   └── interfaces/    # Abstract interfaces
-├── application/       # Application services
-│   └── services/     # Service layer implementations
-├── infrastructure/    # Infrastructure implementations
-│   ├── database/     # Database configuration
-│   └── repositories/ # Repository implementations
-├── web/              # Web interface
-│   └── api/         # REST API endpoints
-└── config/           # Configuration settings
+├── app/
+│   ├── api/          # API endpoints
+│   ├── core/         # Core functionality
+│   ├── db/           # Database models and connections
+│   ├── models/       # Pydantic models
+│   ├── services/     # Business logic
+│   ├── utils/        # Utility functions
+│   └── web/          # Web interface
+│       ├── static/   # Static files (JS, CSS)
+│       └── templates/# HTML templates
+├── config/           # Configuration files
+├── tests/            # Test files
+├── .env              # Environment variables
+├── .env.example      # Example environment variables
+├── requirements.txt  # Python dependencies
+└── README.md         # This file
 ```
 
-## API Endpoints
+## Development
 
-- `/compounds`: Compound management
-- `/sources`: Source management
-- `/targets`: Biological target management
+### Running Tests
+
+```bash
+pytest
+```
+
+### Code Style
+
+This project follows:
+
+- SOLID principles
+- Google Style Guide
+- Modern programming patterns
+- Clean code rules
+
+### Contributing
+
+1. Fork the repository
+2. Create a feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
-## Contributing
+## Acknowledgments
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+- Neo4j for the graph database
+- D3.js for the graph visualization
+- Flask for the web framework
+- Pydantic for data validation
+- All the scientific databases and their APIs

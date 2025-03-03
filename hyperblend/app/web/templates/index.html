@@ -1,0 +1,279 @@
+{% extends "base.html" %}
+
+{% block title %}HyperBlend{% endblock %}
+
+{% block extra_css %}
+<style>
+    /* Only keep styles that can't be handled by Tailwind */
+    .header-stats {
+        display: flex;
+        gap: 20px;
+        margin: 0 auto;  /* Center the stats */
+        padding: 0 2rem;  /* Add padding on both sides */
+        color: rgba(255, 255, 255, 0.75);
+    }
+
+    .stat-item {
+        display: flex;
+        align-items: baseline;
+        gap: 4px;
+        white-space: nowrap;  /* Prevent wrapping */
+    }
+
+    .stat-number {
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+
+    .stat-label {
+        font-size: 0.9rem;
+        opacity: 0.9;
+    }
+
+    /* Ensure the navbar items are properly spaced */
+    .navbar-nav {
+        margin-right: 2rem;  /* Add space after nav links */
+    }
+
+    /* Adjust search form spacing */
+    .d-flex.ms-auto {
+        margin-left: 2rem !important;  /* Add space before search */
+    }
+
+    /* Ensure the page takes up exactly the viewport height */
+    html, body {
+        height: 100vh;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+    }
+
+    body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Header styles */
+    .navbar {
+        height: 56px;
+        flex-shrink: 0;
+        margin: 0;
+        padding: 0 1rem;
+    }
+
+    /* Main content area */
+    main.container-fluid {
+        flex: 1;
+        padding: 0 !important;
+        margin: 0 !important;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    /* Remove any Bootstrap padding */
+    .py-4 {
+        padding-top: 0 !important;
+        padding-bottom: 0 !important;
+    }
+
+    /* Graph container styles */
+    #graph-container {
+        flex: 1;
+        width: 100%;
+        position: relative;
+        background: white;
+        overflow: hidden;
+        margin: 0;
+    }
+
+    /* Footer styles */
+    .footer {
+        height: 56px;
+        flex-shrink: 0;
+        margin: 0;
+        padding: 0 1rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .footer .container {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .footer p {
+        margin: 0;
+        padding: 0;
+        color: rgba(255, 255, 255, 0.75);
+    }
+
+    .footer a {
+        color: rgba(255, 255, 255, 0.75);
+        text-decoration: none;
+    }
+
+    .footer a:hover {
+        color: white;
+        text-decoration: underline;
+    }
+
+    /* Legend styles */
+    .graph-legend {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        z-index: 10;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        margin-bottom: 0.5rem;
+        font-size: 0.875rem;
+    }
+
+    .legend-item:last-child {
+        margin-bottom: 0;
+    }
+
+    .legend-color {
+        width: 1rem;
+        height: 1rem;
+        border-radius: 50%;
+        margin-right: 0.5rem;
+    }
+
+    /* Sidebar styles */
+    #sidebar {
+        position: fixed;
+        top: 56px; /* Match navbar height */
+        right: 0;
+        height: calc(100vh - 112px); /* Viewport height minus header + footer */
+        width: 20rem;
+        background: white;
+        box-shadow: -4px 0 6px -1px rgba(0, 0, 0, 0.1);
+        overflow-y: auto;
+        z-index: 50;
+        transition: transform 0.3s ease;
+    }
+
+    #sidebar.hidden {
+        transform: translateX(100%);
+    }
+
+    /* Loading spinner */
+    .loading-spinner {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 2000;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 1.5rem;
+        border-radius: 0.5rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+    }
+</style>
+{% endblock %}
+
+{% block header_stats %}
+<div class="header-stats">
+    <div class="stat-item">
+        <div class="stat-number" id="compoundCount">-</div>
+        <div class="stat-label">Compounds</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number" id="sourceCount">-</div>
+        <div class="stat-label">Sources</div>
+    </div>
+    <div class="stat-item">
+        <div class="stat-number" id="targetCount">-</div>
+        <div class="stat-label">Targets</div>
+    </div>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Graph Visualization -->
+<div id="graph-container">
+    <!-- Legend -->
+    <div class="graph-legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #3498db;"></div>
+            <span>Compounds</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #2ecc71;"></div>
+            <span>Sources</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #e74c3c;"></div>
+            <span>Targets</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background-color: #95a5a6;"></div>
+            <span>Relationships</span>
+        </div>
+    </div>
+</div>
+
+<!-- Sidebar for Node Details -->
+<div id="sidebar" class="hidden">
+    <!-- Node details will be shown here -->
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="loading-spinner hidden">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Load WebCola first -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/webcola/3.4.0/cola.min.js"></script>
+<script>
+    // Fallback to alternative CDN if the first one fails
+    if (typeof cola === 'undefined') {
+        document.write('<script src="https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js"><\/script>');
+    }
+</script>
+
+<!-- Load D3.js -->
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<!-- Load our application scripts -->
+<script src="{{ url_for('static', filename='js/api.js') }}"></script>
+<script src="{{ url_for('static', filename='js/graph.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+
+<!-- Initialize the application after all scripts are loaded -->
+<script>
+    // Ensure DOM is fully loaded before initializing
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            if (document.getElementById('graph-container')) {
+                window.app = new App();
+            } else {
+                console.error('Graph container not found in DOM');
+            }
+        });
+    } else {
+        if (document.getElementById('graph-container')) {
+            window.app = new App();
+        } else {
+            console.error('Graph container not found in DOM');
+        }
+    }
+</script>
+{% endblock %} 

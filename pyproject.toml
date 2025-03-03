@@ -8,7 +8,7 @@ version = "0.1.0"
 authors = [
   { name="HyperBlend Contributors" },
 ]
-description = "Advanced botanical medicine analysis using hypergraph networks"
+description = "A tool for analyzing natural compounds, their sources, and biological targets"
 readme = "README.md"
 requires-python = ">=3.8"
 classifiers = [
@@ -17,13 +17,23 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "networkx>=3.0",
-    "pydantic>=2.0",
-    "numpy>=1.20",
-    "pandas>=1.5",
-    "scipy>=1.8"
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "neo4j>=5.14.0",
+    "pydantic>=2.5.0",
+    "python-dotenv>=1.0.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "pandas>=2.1.0",
+    "numpy>=1.24.0",
+    "biopython>=1.83",
+    "rdkit>=2023.9.0",
+    "flask-assets>=2.1.0",
 ]
 
 [project.urls]
 "Homepage" = "https://github.com/yourusername/hyperblend"
-"Bug Tracker" = "https://github.com/yourusername/hyperblend/issues" 
+"Bug Tracker" = "https://github.com/yourusername/hyperblend/issues"
+
+[tool.hatch.build.targets.wheel]
+packages = ["hyperblend"] 

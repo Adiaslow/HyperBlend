@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HyperBlend - Network Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/style.css') }}">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.28.1/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/webcola/WebCola/cola.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-cola/cytoscape-cola.js"></script>
+    <style>
+        #details-panel {
+            position: fixed;
+            right: 20px;
+            top: 100px;
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            display: none;
+            max-height: calc(100vh - 140px);
+            overflow-y: auto;
+        }
+        #details-panel h3 {
+            margin-top: 0;
+            color: #2d3748;
+            border-bottom: 1px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        #details-panel dl {
+            margin: 0;
+        }
+        #details-panel dt {
+            font-weight: 600;
+            color: #4a5568;
+            margin-top: 10px;
+        }
+        #details-panel dd {
+            margin-left: 0;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+        .close-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            font-size: 18px;
+            color: #718096;
+        }
+        .close-button:hover {
+            color: #2d3748;
+        }
+    </style>
+</head>
+
+<body>
+    <header class="header">
+        <div class="container">
+            <h1>HyperBlend Network Analysis</h1>
+        </div>
+    </header>
+
+    <nav class="nav">
+        <div class="container">
+            <ul class="nav-list">
+                <li class="nav-item"><a href="#" onclick="loadAllData()">Load All Data</a></li>
+                <li class="nav-item"><a href="#" onclick="resetView()">Reset View</a></li>
+                <li class="nav-item"><a href="#" onclick="toggleLegend()">Toggle Legend</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <main>
+        <div id="cy"></div>
+        <div id="legend" class="legend">
+            <h3>Legend</h3>
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #4299e1;"></span>
+                <span>Compound</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #48bb78;"></span>
+                <span>Source</span>
+            </div>
+            <div class="legend-item">
+                <span class="legend-color" style="background-color: #ed64a6;"></span>
+                <span>Biological Target</span>
+            </div>
+        </div>
+        <div id="details-panel">
+            <button class="close-button" onclick="hideDetailsPanel()">×</button>
+            <h3>Node Details</h3>
+            <div id="details-content"></div>
+        </div>
+    </main>
+
+    <script>
+        // Register cola extension before any other code
+        (function(){
+            try {
+                let cola = window.cytoscapeCola;
+                if (typeof cola !== 'undefined') {
+                    cytoscape.use(cola);
+                }
+            } catch (e) {
+                console.error('Failed to register cola layout:', e);
+            }
+        })();
+
+        // Make functions globally available
+        window.hideDetailsPanel = function() {
+            document.getElementById('details-panel').style.display = 'none';
+            // Remove highlights when closing panel
+            if (window.lastHighlightedNode) {
+                unhighlightNode(window.lastHighlightedNode);
+                window.lastHighlightedNode = null;
+            }
+        };
+
+        window.unhighlightNode = function(node) {
+            window.cy.elements().removeClass('highlighted');
+        };
+
+        window.highlightNode = function(node) {
+            // Remove previous highlights
+            if (window.lastHighlightedNode) {
+                unhighlightNode(window.lastHighlightedNode);
+            }
+            
+            // Highlight the selected node
+            node.addClass('highlighted');
+            
+            // Get connected edges and their connected nodes
+            const connectedEdges = node.connectedEdges();
+            connectedEdges.addClass('highlighted');
+            
+            // Highlight connected nodes
+            const connectedNodes = connectedEdges.connectedNodes();
+            connectedNodes.addClass('highlighted');
+            
+            window.lastHighlightedNode = node;
+        };
+
+        window.showNodeDetails = function(node) {
+            const data = node.data();
+            const detailsPanel = document.getElementById('details-panel');
+            const detailsContent = document.getElementById('details-content');
+            
+            // Clear previous content
+            detailsContent.innerHTML = '';
+            
+            // Create definition list for details
+            const dl = document.createElement('dl');
+            
+            // Add common properties
+            const commonProps = {
+                'ID': data.id,
+                'Name': data.label,
+                'Type': data.type.charAt(0).toUpperCase() + data.type.slice(1),
+                'Description': data.originalData.description || 'No description available'
+            };
+            
+            // Add type-specific properties
+            if (data.type === 'compound') {
+                Object.assign(commonProps, {
+                    'Molecular Formula': data.originalData.molecular_formula || 'N/A',
+                    'Molecular Weight': data.originalData.molecular_weight || 'N/A',
+                    'SMILES': data.originalData.smiles || 'N/A',
+                    'PubChem ID': data.originalData.pubchem_id || 'N/A'
+                });
+            } else if (data.type === 'target') {
+                Object.assign(commonProps, {
+                    'Organism': data.originalData.organism || 'N/A',
+                    'Target Type': data.originalData.type || 'N/A'
+                });
+            }
+            
+            // Create definition terms and descriptions
+            for (const [key, value] of Object.entries(commonProps)) {
+                const dt = document.createElement('dt');
+                dt.textContent = key;
+                const dd = document.createElement('dd');
+                dd.textContent = value;
+                dl.appendChild(dt);
+                dl.appendChild(dd);
+            }
+            
+            detailsContent.appendChild(dl);
+            detailsPanel.style.display = 'block';
+        };
+
+        // Initialize after all scripts are loaded
+        window.addEventListener('load', function() {
+            // Initialize Cytoscape with optimized force-directed layout
+            window.cy = cytoscape({
+                container: document.getElementById('cy'),
+                style: [
+                    {
+                        selector: 'node',
+                        style: {
+                            'background-color': 'data(color)',
+                            'label': 'data(label)',
+                            'text-valign': 'bottom',
+                            'text-halign': 'center',
+                            'font-size': '12px',
+                            'text-wrap': 'wrap',
+                            'text-max-width': '100px',
+                            'width': '30',
+                            'height': '30',
+                            'shape': 'ellipse',  // Changed from 'circle' to 'ellipse'
+                            'text-outline-width': 2,
+                            'text-outline-color': '#fff',
+                            'border-width': 0,
+                            'border-color': '#2c5282',
+                            'border-style': 'solid',
+                            'text-margin-y': '10'
+                        }
+                    },
+                    {
+                        selector: 'edge',
+                        style: {
+                            'width': 2,
+                            'line-color': '#a0aec0',
+                            'target-arrow-color': '#a0aec0',
+                            'target-arrow-shape': 'triangle',
+                            'curve-style': 'bezier',
+                            'label': 'data(label)',
+                            'font-size': '10px',
+                            'text-rotation': 'autorotate',
+                            'text-outline-width': 2,
+                            'text-outline-color': '#fff'
+                        }
+                    },
+                    {
+                        selector: '.highlighted',
+                        style: {
+                            'line-color': '#2c5282',
+                            'target-arrow-color': '#2c5282',
+                            'width': 4,
+                            'z-index': 999
+                        }
+                    },
+                    {
+                        selector: 'node.highlighted',
+                        style: {
+                            'border-width': 3
+                        }
+                    }
+                ],
+                layout: {
+                    name: 'cola',
+                    animate: true,
+                    refresh: 1,
+                    maxSimulationTime: 400,
+                    ungrabifyWhileSimulating: false,
+                    fit: false,
+                    padding: 10,
+                    nodeDimensionsIncludeLabels: true,
+                    randomize: true,
+                    avoidOverlap: true,
+                    handleDisconnected: true,
+                    convergenceThreshold: 0.1,
+                    discreteGraph: false,
+                    gravity: 0.8,
+                    edgeElasticity: 0.2,
+                    gravityRange: 100,
+                    gravityCompound: true,
+                    viewport: {
+                        zoom: 1,
+                        pan: { x: 0, y: 0 }
+                    },
+                    throttle: 45,
+                    animate: 'end',
+                    nodeSpacing: function(node) {
+                        // Use uniform spacing for circular buffers
+                        return 60;
+                    },
+                    boundingBox: undefined,
+                    centerGraph: true,
+                    spacingFactor: 1,
+                    // Add circular constraints
+                    circularConstraint: true,
+                    edgeLength: function(edge) {
+                        return edge.data('label') === 'interacts with' ? 200 : 170;
+                    },
+                    flow: {
+                        axis: 'none',
+                        minSeparation: 10
+                    },
+                    unconstrIter: 100,
+                    userConstIter: 100,
+                    allConstIter: 100
+                }
+            });
+
+            // Node colors
+            window.nodeColors = {
+                compound: '#4299e1',
+                source: '#48bb78',
+                target: '#ed64a6'
+            };
+
+            window.lastHighlightedNode = null;
+
+            // Define the loadAllData function
+            window.loadAllData = async function() {
+                try {
+                    console.log('Starting to load data...');
+                    
+                    // Clear existing elements
+                    window.cy.elements().remove();
+                    
+                    // Get container dimensions for better initial placement
+                    const container = document.getElementById('cy');
+                    const width = container.offsetWidth;
+                    const height = container.offsetHeight;
+                    
+                    // Calculate spread factors to avoid clustering
+                    const spreadFactorX = width * 1.5;  // Use wider area than visible
+                    const spreadFactorY = height * 1.5;  // Use taller area than visible
+                    const centerX = width / 2;
+                    const centerY = height / 2;
+                    
+                    // Helper function for random position with polar coordinates
+                    function getRandomPosition() {
+                        const angle = Math.random() * 2 * Math.PI;  // Random angle
+                        const radius = Math.random() * Math.min(spreadFactorX, spreadFactorY) / 2;  // Random radius
+                        return {
+                            x: centerX + radius * Math.cos(angle),
+                            y: centerY + radius * Math.sin(angle)
+                        };
+                    }
+
+                    // Fetch all data
+                    console.log('Fetching base data...');
+                    const [compounds, sources, targets] = await Promise.all([
+                        fetch('/compounds').then(async r => {
+                            if (!r.ok) throw new Error(`Failed to fetch compounds: ${await r.text()}`);
+                            return r.json();
+                        }),
+                        fetch('/sources').then(async r => {
+                            if (!r.ok) throw new Error(`Failed to fetch sources: ${await r.text()}`);
+                            return r.json();
+                        }),
+                        fetch('/targets').then(async r => {
+                            if (!r.ok) throw new Error(`Failed to fetch targets: ${await r.text()}`);
+                            return r.json();
+                        })
+                    ]);
+
+                    console.log(`Loaded: ${compounds.length} compounds, ${sources.length} sources, ${targets.length} targets`);
+
+                    // Add nodes with improved random positions
+                    compounds.forEach(compound => {
+                        const pos = getRandomPosition();
+                        window.cy.add({
+                            group: 'nodes',
+                            data: {
+                                id: `compound-${compound.id}`,
+                                label: compound.name,
+                                type: 'compound',
+                                color: window.nodeColors.compound,
+                                originalData: compound
+                            },
+                            position: pos
+                        });
+                    });
+
+                    sources.forEach(source => {
+                        const pos = getRandomPosition();
+                        window.cy.add({
+                            group: 'nodes',
+                            data: {
+                                id: `source-${source.id}`,
+                                label: source.name,
+                                type: 'source',
+                                color: window.nodeColors.source,
+                                originalData: source
+                            },
+                            position: pos
+                        });
+                    });
+
+                    targets.forEach(target => {
+                        const pos = getRandomPosition();
+                        window.cy.add({
+                            group: 'nodes',
+                            data: {
+                                id: `target-${target.id}`,
+                                label: target.standardized_name || target.name,  // Use standardized name if available
+                                type: 'target',
+                                color: window.nodeColors.target,
+                                originalData: target
+                            },
+                            position: pos
+                        });
+                    });
+
+                    console.log('Added all nodes to the graph');
+
+                    // Add edges for compound-source relationships
+                    let edgeCount = 0;
+                    for (const compound of compounds) {
+                        try {
+                            console.log(`Fetching sources for compound: ${compound.id}`);
+                            const response = await fetch(`/compounds/${compound.id}/sources`);
+                            if (!response.ok) {
+                                console.error(`Failed to fetch sources for compound ${compound.id}:`, await response.text());
+                                continue;
+                            }
+                            const sources = await response.json();
+                            console.log(`Found ${sources.length} sources for compound ${compound.id}`);
+                            
+                            sources.forEach(source => {
+                                const edgeId = `edge-source-${compound.id}-${source.id}`;
+                                console.log(`Adding edge: ${edgeId}`);
+                                window.cy.add({
+                                    group: 'edges',
+                                    data: {
+                                        id: edgeId,
+                                        source: `compound-${compound.id}`,
+                                        target: `source-${source.id}`,
+                                        label: 'found in'
+                                    }
+                                });
+                                edgeCount++;
+                            });
+                        } catch (error) {
+                            console.error(`Error fetching sources for compound ${compound.id}:`, error);
+                        }
+                    }
+
+                    // Add edges for compound-target relationships
+                    for (const compound of compounds) {
+                        try {
+                            console.log(`Fetching targets for compound: ${compound.id}`);
+                            const response = await fetch(`/compounds/${compound.id}/targets`);
+                            if (!response.ok) {
+                                console.error(`Failed to fetch targets for compound ${compound.id}:`, await response.text());
+                                continue;
+                            }
+                            const targets = await response.json();
+                            console.log(`Found ${targets.length} targets for compound ${compound.id}`);
+                            
+                            targets.forEach(target => {
+                                const edgeId = `edge-target-${compound.id}-${target.id}`;
+                                console.log(`Adding edge: ${edgeId}`);
+                                window.cy.add({
+                                    group: 'edges',
+                                    data: {
+                                        id: edgeId,
+                                        source: `compound-${compound.id}`,
+                                        target: `target-${target.id}`,
+                                        label: 'interacts with'
+                                    }
+                                });
+                                edgeCount++;
+                            });
+                        } catch (error) {
+                            console.error(`Error fetching targets for compound ${compound.id}:`, error);
+                        }
+                    }
+
+                    console.log(`Total edges added: ${edgeCount}`);
+
+                    // Apply optimized force-directed layout
+                    console.log('Applying force-directed layout...');
+                    const layout = window.cy.layout({
+                        name: 'cola',
+                        animate: true,
+                        refresh: 1,
+                        maxSimulationTime: 100000,
+                        ungrabifyWhileSimulating: false,
+                        fit: false,
+                        padding: 50,
+                        nodeDimensionsIncludeLabels: true,
+                        randomize: true,
+                        avoidOverlap: true,
+                        handleDisconnected: true,
+                        convergenceThreshold: 0.0001,
+                        discreteGraph: false,
+                        gravity: 0.8,
+                        edgeElasticity: 0.2,
+                        gravityRange: 100,
+                        gravityCompound: true,
+                        viewport: {
+                            zoom: 1,
+                            pan: { x: 0, y: 0 }
+                        },
+                        throttle: 45,
+                        animate: 'end',
+                        nodeSpacing: function(node) {
+                            // Use uniform spacing for circular buffers
+                            return 60;
+                        },
+                        boundingBox: undefined,
+                        centerGraph: true,
+                        spacingFactor: 1,
+                        // Add circular constraints
+                        circularConstraint: true,
+                        edgeLength: function(edge) {
+                            return edge.data('label') === 'interacts with' ? 200 : 170;
+                        },
+                        flow: {
+                            axis: 'none',
+                            minSeparation: 50
+                        },
+                        unconstrIter: 100,
+                        userConstIter: 100,
+                        allConstIter: 100,
+                        ready: function() {
+                            // Only fit on initial load
+                            if (!window.cy.scratch('_layoutRun')) {
+                                window.cy.fit();
+                                window.cy.center();
+                                window.cy.scratch('_layoutRun', true);
+                            }
+                        }
+                    });
+
+                    layout.run();
+                    console.log('Force-directed layout applied');
+
+                    // Add continuous layout updates for dragged nodes
+                    window.cy.on('drag', 'node', function(evt) {
+                        if (!evt.target.scratch('_dragging')) {
+                            evt.target.scratch('_dragging', true);
+                            evt.target.connectedEdges().style({
+                                'line-color': '#2c5282',
+                                'width': 3
+                            });
+                        }
+                    });
+
+                    window.cy.on('dragfree', 'node', function(evt) {
+                        evt.target.scratch('_dragging', false);
+                        evt.target.connectedEdges().style({
+                            'line-color': '#a0aec0',
+                            'width': 2
+                        });
+                        
+                        // Run a quick layout only on the affected neighborhood
+                        const neighborhood = evt.target.neighborhood().add(evt.target);
+                        const subLayout = neighborhood.layout({
+                            name: 'cola',
+                            maxSimulationTime: 2000,
+                            fit: false,
+                            animate: true,
+                            refresh: 1,
+                            gravity: 0.8,
+                            edgeElasticity: 0.2,
+                            gravityRange: 100,
+                            gravityCompound: true,
+                            viewport: {
+                                zoom: 1,
+                                pan: { x: 0, y: 0 }
+                            },
+                            throttle: 45,
+                            animate: 'end',
+                            flow: {
+                                axis: 'none',
+                                minSeparation: 50
+                            }
+                        });
+                        subLayout.run();
+                    });
+
+                } catch (error) {
+                    console.error('Error loading data:', error);
+                }
+            };
+
+            // Define other functions in the global scope
+            window.resetView = function() {
+                window.cy.fit();
+                window.cy.center();
+            };
+
+            window.toggleLegend = function() {
+                const legend = document.getElementById('legend');
+                legend.style.display = legend.style.display === 'none' ? 'block' : 'none';
+            };
+
+            // Add event handlers
+            window.cy.on('tap', 'node', function(evt) {
+                const node = evt.target;
+                window.highlightNode(node);
+                window.showNodeDetails(node);
+            });
+
+            window.cy.on('tap', function(evt) {
+                if (evt.target === window.cy) {
+                    hideDetailsPanel();
+                }
+            });
+
+            // Add zoom handlers
+            window.cy.on('zoom', function(evt) {
+                const zoom = window.cy.zoom();
+                // Adjust label visibility based on zoom level
+                if (zoom < 0.5) {
+                    window.cy.style()
+                        .selector('node')
+                        .style({
+                            'text-opacity': 0
+                        })
+                        .update();
+                } else {
+                    window.cy.style()
+                        .selector('node')
+                        .style({
+                            'text-opacity': 1
+                        })
+                        .update();
+                }
+            });
+
+            // Add mouse interaction handlers
+            window.cy.on('mouseover', 'node', function(e) {
+                if (!e.target.hasClass('highlighted')) {
+                    e.target.style({
+                        'border-width': 1,
+                        'border-color': '#718096'
+                    });
+                }
+            });
+
+            window.cy.on('mouseout', 'node', function(e) {
+                if (!e.target.hasClass('highlighted')) {
+                    e.target.style({
+                        'border-width': 0
+                    });
+                }
+            });
+
+            // Add drag interaction
+            window.cy.on('dragfree', 'node', function(e) {
+                e.target.lock(); // Lock node position after drag
+            });
+
+            // Add double-click to unlock
+            window.cy.on('dblclick', 'node', function(e) {
+                e.target.unlock(); // Unlock node position
+            });
+        });
+    </script>
+</body>
+
+</html>

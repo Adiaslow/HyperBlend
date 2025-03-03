@@ -1,0 +1,679 @@
+[
+  {
+    "name": "Blue Lotus",
+    "scientific_name": "Nymphaea caerulea",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Nymphaeales",
+      "family": "Nymphaeaceae",
+      "genus": "Nymphaea",
+      "species": "N. caerulea"
+    },
+    "compounds": [
+      {
+        "name": "Nuciferine",
+        "category": "alkaloid",
+        "notes": "primary alkaloid"
+      },
+      {
+        "name": "Aporphine",
+        "category": "alkaloid"
+      },
+      {
+        "name": "Nornuciferine",
+        "category": "alkaloid"
+      },
+      {
+        "name": "N-methylasimilobine",
+        "category": "alkaloid"
+      },
+      {
+        "name": "Roemerine",
+        "category": "alkaloid"
+      },
+      {
+        "name": "Quercetin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Kaempferol",
+        "category": "flavonoid"
+      }
+    ]
+  },
+  {
+    "name": "San Pedro Cactus",
+    "scientific_name": "Echinopsis pachanoi",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Caryophyllales",
+      "family": "Cactaceae",
+      "genus": "Echinopsis",
+      "species": "E. pachanoi"
+    },
+    "compounds": [
+      {
+        "name": "Mescaline",
+        "category": "phenethylamine alkaloid",
+        "notes": "primary active compound"
+      },
+      {
+        "name": "3,4-Dimethoxyphenethylamine",
+        "category": "phenethylamine"
+      },
+      {
+        "name": "3,4,5-Trimethoxyphenethylamine",
+        "category": "phenethylamine"
+      },
+      {
+        "name": "Tyramine",
+        "category": "phenethylamine"
+      },
+      {
+        "name": "Hordenine",
+        "category": "phenethylamine"
+      },
+      {
+        "name": "3-Methoxytyramine",
+        "category": "phenethylamine"
+      },
+      {
+        "name": "Anhalinine",
+        "category": "alkaloid"
+      },
+      {
+        "name": "Anhalonidine",
+        "category": "alkaloid"
+      }
+    ]
+  },
+  {
+    "name": "Morning Glory",
+    "scientific_name": "Ipomoea tricolor, Ipomoea violacea",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Solanales",
+      "family": "Convolvulaceae",
+      "genus": "Ipomoea",
+      "species": ["I. tricolor", "I. violacea"]
+    },
+    "compounds": [
+      {
+        "name": "LSA",
+        "full_name": "Lysergic acid amide",
+        "category": "ergoline alkaloid",
+        "notes": "primary active compound"
+      },
+      {
+        "name": "Ergine",
+        "category": "ergoline alkaloid"
+      },
+      {
+        "name": "Isoergine",
+        "category": "ergoline alkaloid",
+        "notes": "isomer of ergine"
+      },
+      {
+        "name": "Lysergol",
+        "category": "ergoline alkaloid"
+      },
+      {
+        "name": "Elymoclavine",
+        "category": "ergoline alkaloid"
+      },
+      {
+        "name": "Chanoclavine",
+        "category": "ergoline alkaloid"
+      },
+      {
+        "name": "Ergometrine",
+        "category": "ergoline alkaloid"
+      },
+      {
+        "name": "Penniclavine",
+        "category": "ergoline alkaloid"
+      }
+    ]
+  },
+  {
+    "name": "Kava",
+    "scientific_name": "Piper methysticum",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Magnoliids",
+      "order": "Piperales",
+      "family": "Piperaceae",
+      "genus": "Piper",
+      "species": "P. methysticum"
+    },
+    "compounds": [
+      {
+        "name": "Kavain",
+        "category": "kavalactone"
+      },
+      {
+        "name": "Dihydrokavain",
+        "category": "kavalactone"
+      },
+      {
+        "name": "Methysticin",
+        "category": "kavalactone"
+      },
+      {
+        "name": "Dihydromethysticin",
+        "category": "kavalactone"
+      },
+      {
+        "name": "Yangonin",
+        "category": "kavalactone"
+      },
+      {
+        "name": "Desmethoxyyangonin",
+        "category": "kavalactone"
+      },
+      {
+        "name": "Flavokavain A",
+        "category": "chalcone"
+      },
+      {
+        "name": "Flavokavain B",
+        "category": "chalcone"
+      },
+      {
+        "name": "Flavokavain C",
+        "category": "chalcone"
+      },
+      {
+        "name": "Pipermethystine",
+        "category": "alkaloid"
+      }
+    ]
+  },
+  {
+    "name": "Damiana",
+    "scientific_name": "Turnera diffusa",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Malpighiales",
+      "family": "Passifloraceae",
+      "genus": "Turnera",
+      "species": "T. diffusa"
+    },
+    "compounds": [
+      {
+        "name": "Damianin",
+        "category": "compound",
+        "notes": "primary active compound"
+      },
+      {
+        "name": "Arbutin",
+        "category": "glycoside"
+      },
+      {
+        "name": "Tannins",
+        "category": "polyphenol"
+      },
+      {
+        "name": "Gonzalitosin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Tetraphyllin B",
+        "category": "flavonoid"
+      },
+      {
+        "name": "α-pinene",
+        "category": "essential oil terpene"
+      },
+      {
+        "name": "β-pinene",
+        "category": "essential oil terpene"
+      },
+      {
+        "name": "Thymol",
+        "category": "essential oil phenol"
+      },
+      {
+        "name": "Cineol",
+        "category": "essential oil"
+      },
+      {
+        "name": "Cymene",
+        "category": "essential oil"
+      }
+    ]
+  },
+  {
+    "name": "Wild Dagga/Lion's Tail",
+    "scientific_name": "Leonotis leonurus",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Lamiales",
+      "family": "Lamiaceae",
+      "genus": "Leonotis",
+      "species": "L. leonurus"
+    },
+    "compounds": [
+      {
+        "name": "Leonurine",
+        "category": "alkaloid",
+        "notes": "primary active compound"
+      },
+      {
+        "name": "Marrubiin",
+        "category": "diterpenoid"
+      },
+      {
+        "name": "Leonotinin",
+        "category": "compound"
+      },
+      {
+        "name": "Leoheterin",
+        "category": "compound"
+      },
+      {
+        "name": "Leosibirin",
+        "category": "compound"
+      },
+      {
+        "name": "α-pinene",
+        "category": "terpene"
+      },
+      {
+        "name": "β-pinene",
+        "category": "terpene"
+      },
+      {
+        "name": "Caryophyllene",
+        "category": "terpene"
+      },
+      {
+        "name": "Limonene",
+        "category": "terpene"
+      }
+    ]
+  },
+  {
+    "name": "Syrian Rue",
+    "scientific_name": "Peganum harmala",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Sapindales",
+      "family": "Nitrariaceae",
+      "genus": "Peganum",
+      "species": "P. harmala"
+    },
+    "compounds": [
+      {
+        "name": "Harmine",
+        "category": "β-carboline alkaloid",
+        "notes": "primary alkaloid, MAOI"
+      },
+      {
+        "name": "Harmaline",
+        "category": "β-carboline alkaloid",
+        "notes": "MAOI"
+      },
+      {
+        "name": "Tetrahydroharmine",
+        "alias": "THH",
+        "category": "β-carboline alkaloid",
+        "notes": "MAOI"
+      },
+      {
+        "name": "Harmol",
+        "category": "β-carboline alkaloid"
+      },
+      {
+        "name": "Harmalol",
+        "category": "β-carboline alkaloid"
+      },
+      {
+        "name": "Vasicine",
+        "category": "quinazoline alkaloid"
+      },
+      {
+        "name": "Vasicinone",
+        "category": "quinazoline alkaloid"
+      },
+      {
+        "name": "Deoxyvasicinone",
+        "category": "quinazoline alkaloid"
+      },
+      {
+        "name": "Peganine",
+        "category": "alkaloid"
+      }
+    ]
+  },
+  {
+    "name": "Dream Herb",
+    "scientific_name": "Calea zacatechichi",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Asterales",
+      "family": "Asteraceae",
+      "genus": "Calea",
+      "species": "C. zacatechichi"
+    },
+    "compounds": [
+      {
+        "name": "Caleicin I",
+        "category": "germacranolide"
+      },
+      {
+        "name": "Caleicin II",
+        "category": "germacranolide"
+      },
+      {
+        "name": "Caleochromene A",
+        "category": "germacranolide"
+      },
+      {
+        "name": "Caleochromene B",
+        "category": "germacranolide"
+      },
+      {
+        "name": "Calaxin",
+        "category": "germacranolide"
+      },
+      {
+        "name": "Calein A",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Calein B",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Acacetin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "O-methylacacetin",
+        "category": "flavonoid"
+      }
+    ]
+  },
+  {
+    "name": "Passionflower",
+    "scientific_name": "Passiflora incarnata",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Malpighiales",
+      "family": "Passifloraceae",
+      "genus": "Passiflora",
+      "species": "P. incarnata"
+    },
+    "compounds": [
+      {
+        "name": "Harmine",
+        "category": "harmala alkaloid",
+        "notes": "trace amounts"
+      },
+      {
+        "name": "Harmaline",
+        "category": "harmala alkaloid",
+        "notes": "trace amounts"
+      },
+      {
+        "name": "Harmalol",
+        "category": "harmala alkaloid"
+      },
+      {
+        "name": "Chrysin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Apigenin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Luteolin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Quercetin",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Kaempferol",
+        "category": "flavonoid"
+      },
+      {
+        "name": "Maltol",
+        "category": "compound"
+      },
+      {
+        "name": "Vitexin",
+        "category": "C-glycosyl flavone"
+      },
+      {
+        "name": "Isovitexin",
+        "category": "C-glycosyl flavone"
+      },
+      {
+        "name": "Orientin",
+        "category": "C-glycosyl flavone"
+      },
+      {
+        "name": "Isoorientin",
+        "category": "C-glycosyl flavone"
+      },
+      {
+        "name": "GABA",
+        "full_name": "gamma-aminobutyric acid",
+        "category": "amino acid"
+      }
+    ]
+  },
+  {
+    "name": "Kratom",
+    "scientific_name": "Mitragyna speciosa",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Gentianales",
+      "family": "Rubiaceae",
+      "genus": "Mitragyna",
+      "species": "M. speciosa"
+    },
+    "compounds": [
+      {
+        "name": "Mitragynine",
+        "category": "indole alkaloid",
+        "notes": "primary alkaloid"
+      },
+      {
+        "name": "7-hydroxymitragynine",
+        "category": "indole alkaloid",
+        "notes": "more potent than mitragynine"
+      },
+      {
+        "name": "Speciogynine",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Paynantheine",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Speciociliatine",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Mitraphylline",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Ajmalicine",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Corynantheidine",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Mitraciliatine",
+        "category": "indole alkaloid"
+      },
+      {
+        "name": "Isomitraphylline",
+        "category": "indole alkaloid"
+      }
+    ]
+  },
+  {
+    "name": "Wormwood",
+    "scientific_name": "Artemisia absinthium",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Asterales",
+      "family": "Asteraceae",
+      "genus": "Artemisia",
+      "species": "A. absinthium"
+    },
+    "compounds": [
+      {
+        "name": "α-Thujone",
+        "category": "monoterpene",
+        "notes": "primary active compound"
+      },
+      {
+        "name": "β-Thujone",
+        "category": "monoterpene"
+      },
+      {
+        "name": "Absinthin",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Anabsinthin",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Artabsin",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Artemisetin",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Artemisinin",
+        "category": "sesquiterpene lactone"
+      },
+      {
+        "name": "Chamazulene",
+        "category": "essential oil"
+      },
+      {
+        "name": "Sabinene",
+        "category": "essential oil"
+      },
+      {
+        "name": "trans-Sabinyl acetate",
+        "category": "essential oil"
+      }
+    ]
+  },
+  {
+    "name": "California Poppy",
+    "scientific_name": "Eschscholzia californica",
+    "source_type": "plant",
+    "taxonomy": {
+      "kingdom": "Plantae",
+      "division": "Angiosperms",
+      "class": "Eudicots",
+      "order": "Ranunculales",
+      "family": "Papaveraceae",
+      "genus": "Eschscholzia",
+      "species": "E. californica"
+    },
+    "compounds": [
+      {
+        "name": "Californidine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Escholtzine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Protopine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Allocryptopine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Sanguinarine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Chelirubine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Macarpine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Chelerythrine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Berberine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Coptisine",
+        "category": "isoquinoline alkaloid"
+      },
+      {
+        "name": "Quercetin",
+        "category": "flavonoid glycoside"
+      },
+      {
+        "name": "Isorhamnetin",
+        "category": "flavonoid glycoside"
+      },
+      {
+        "name": "Rutin",
+        "category": "flavonoid glycoside"
+      }
+    ]
+  }
+]

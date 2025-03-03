@@ -1,0 +1,165 @@
+{% extends "base.html" %}
+
+{% block title %}Sources - HyperBlend{% endblock %}
+
+{% block content %}
+<div class="container mx-auto px-4 py-8">
+    <h1 class="text-3xl font-bold mb-6">Natural Sources</h1>
+    
+    <!-- Search and Add Bar -->
+    <div class="mb-6">
+        <div class="flex gap-4">
+            <input type="text" id="searchInput" 
+                   class="flex-grow p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
+                   placeholder="Search sources...">
+            <button id="addSourceBtn" 
+                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                Add Source
+            </button>
+        </div>
+    </div>
+
+    <!-- Add Source Modal -->
+    <div id="addSourceModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+        <div class="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-4">Add Natural Source</h2>
+            <form id="addSourceForm" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-1">Database</label>
+                    <select id="sourceDatabase" name="database" required
+                            class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">Select database...</option>
+                        <option value="ncbi">NCBI Taxonomy</option>
+                        <option value="gbif">GBIF</option>
+                        <option value="npdb">Natural Products DB</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-1">Identifier</label>
+                    <input type="text" id="sourceIdentifier" name="identifier" required
+                           class="w-full p-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                           placeholder="Enter database ID">
+                </div>
+                <div class="flex justify-end gap-2">
+                    <button type="button" id="cancelAddSource"
+                            class="px-4 py-2 border rounded hover:bg-gray-100 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors">
+                        Add
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Sources List -->
+    <div id="sourcesList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Sources will be dynamically added here -->
+    </div>
+</div>
+
+<!-- Source Template -->
+<template id="sourceTemplate">
+    <div class="source-card bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
+        <h3 class="text-xl font-semibold mb-2"></h3>
+        <div class="text-sm text-gray-600 mb-2">
+            <p class="mb-1">Database: <span class="database"></span></p>
+            <p class="mb-1">ID: <span class="identifier"></span></p>
+            <p class="mb-1">Compounds: <span class="compound-count"></span></p>
+        </div>
+        <p class="text-sm text-gray-700 description line-clamp-3"></p>
+    </div>
+</template>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const searchInput = document.getElementById('searchInput');
+    const sourcesList = document.getElementById('sourcesList');
+    const addSourceBtn = document.getElementById('addSourceBtn');
+    const addSourceModal = document.getElementById('addSourceModal');
+    const addSourceForm = document.getElementById('addSourceForm');
+    const cancelAddSource = document.getElementById('cancelAddSource');
+    const sourceTemplate = document.getElementById('sourceTemplate');
+
+    // Load initial sources
+    loadSources();
+
+    // Search functionality
+    let debounceTimer;
+    searchInput.addEventListener('input', function() {
+        clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(() => {
+            loadSources(this.value);
+        }, 300);
+    });
+
+    // Modal controls
+    addSourceBtn.addEventListener('click', () => {
+        addSourceModal.classList.remove('hidden');
+    });
+
+    cancelAddSource.addEventListener('click', () => {
+        addSourceModal.classList.add('hidden');
+        addSourceForm.reset();
+    });
+
+    // Form submission
+    addSourceForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = {
+            database: document.getElementById('sourceDatabase').value,
+            identifier: document.getElementById('sourceIdentifier').value
+        };
+        
+        try {
+            const response = await fetch('/api/sources', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to add source');
+            }
+
+            const result = await response.json();
+            addSourceModal.classList.add('hidden');
+            addSourceForm.reset();
+            loadSources(); // Reload the sources list
+        } catch (error) {
+            console.error('Error:', error);
+            alert('Failed to add source. Please try again.');
+        }
+    });
+
+    async function loadSources(query = '') {
+        try {
+            const response = await fetch(`/api/sources?q=${encodeURIComponent(query)}`);
+            const sources = await response.json();
+            
+            sourcesList.innerHTML = '';
+            sources.forEach(source => {
+                const card = sourceTemplate.content.cloneNode(true);
+                
+                card.querySelector('h3').textContent = source.name;
+                card.querySelector('.database').textContent = source.database || 'N/A';
+                card.querySelector('.identifier').textContent = source.identifier || 'N/A';
+                card.querySelector('.compound-count').textContent = source.compound_count || '0';
+                card.querySelector('.description').textContent = source.description || 'No description available';
+                
+                sourcesList.appendChild(card);
+            });
+        } catch (error) {
+            console.error('Error loading sources:', error);
+        }
+    }
+});
+</script>
+{% endblock %} 
