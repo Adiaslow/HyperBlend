@@ -1,111 +1,360 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}HyperBlend{% endblock %}</title>
-    
-    <!-- Favicon -->
-    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-    
-    <!-- CSS -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    {% block extra_css %}{% endblock %}
-    
-    <!-- JavaScript -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://d3js.org/d3.v7.min.js"></script>
-    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    {% block extra_js %}{% endblock %}
-</head>
-<body>
-    <!-- Navigation -->
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{{ url_for('main.index') }}">
-                <i class="fas fa-project-diagram"></i> HyperBlend
+{% extends "bootstrap/base.html" %}
+
+{% block title %}HyperBlend{% endblock %}
+
+{% block styles %}
+{{ super() }}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+<style>
+    /* Base styles */
+    body {
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        background-color: #f8fafc;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Navbar styles */
+    .navbar {
+        background-color: #1a202c;
+        border: none;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        height: 60px;
+        padding: 0 1rem;
+    }
+
+    .navbar > .container-fluid {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 100%;
+        padding: 0;
+    }
+
+    .navbar-header {
+        display: flex;
+        align-items: center;
+        min-width: 200px;
+    }
+
+    .navbar-brand {
+        color: #f7fafc !important;
+        font-weight: 600;
+        font-size: 1.25rem;
+        padding: 0;
+        margin: 0;
+        height: 60px;
+        line-height: 60px;
+    }
+
+    /* Center navigation */
+    .navbar-collapse {
+        display: flex !important;
+        justify-content: center;
+        flex: 1;
+        height: 100%;
+    }
+
+    .navbar-nav {
+        display: flex;
+        align-items: center;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+
+    .navbar-nav > li {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        margin: 0 1.5rem;
+        height: 100%;
+        position: relative;
+    }
+
+    .navbar-nav > li > a {
+        color: #e2e8f0 !important;
+        font-weight: 500;
+        padding: 0.5rem 1rem;
+        transition: color 0.2s;
+        height: auto;
+        line-height: normal;
+        margin-top: 4px;
+    }
+
+    .navbar-nav > li > a:hover {
+        color: #ffffff !important;
+        text-decoration: none;
+    }
+
+    .nav-count {
+        color: #e2e8f0;
+        font-size: 0.8rem;
+        opacity: 0.8;
+        margin-top: 2px;
+    }
+
+    /* Search bar styles */
+    .navbar-form {
+        margin: 0;
+        padding: 0;
+        display: flex;
+        align-items: center;
+        min-width: 200px;
+        justify-content: flex-end;
+    }
+
+    .navbar-form .form-group {
+        margin: 0;
+    }
+
+    .navbar-form .form-control {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: white;
+        width: 200px;
+        height: 34px;
+        padding: 6px 12px;
+        border-radius: 4px;
+        transition: all 0.3s ease;
+    }
+
+    .navbar-form .form-control:focus {
+        background: rgba(255, 255, 255, 0.15);
+        border-color: rgba(255, 255, 255, 0.3);
+        outline: none;
+        box-shadow: none;
+    }
+
+    .navbar-form .form-control::placeholder {
+        color: rgba(255, 255, 255, 0.5);
+    }
+
+    /* Remove old statistics styles */
+    .navbar-nav.navbar-right {
+        display: none;
+    }
+
+    /* Main content wrapper */
+    .content-wrapper {
+        flex: 1 0 auto;
+        padding-bottom: 60px; /* Height of footer */
+    }
+
+    /* Footer styles */
+    .footer {
+        background-color: #1a202c;
+        color: #e2e8f0;
+        padding: 1rem 0;
+        flex-shrink: 0;
+        width: 100%;
+        position: fixed;
+        bottom: 0;
+    }
+
+    .footer-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 0 1rem;
+    }
+
+    .footer-links {
+        display: flex;
+        gap: 1.5rem;
+    }
+
+    .footer a {
+        color: #e2e8f0;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    .footer a:hover {
+        color: #ffffff;
+    }
+
+    /* Container styles */
+    .container-fluid {
+        max-width: 1600px;
+        margin: 0 auto;
+    }
+</style>
+{% block extra_css %}{% endblock %}
+{% endblock %}
+
+{% block navbar %}
+<nav class="navbar navbar-default">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <a class="navbar-brand" href="{{ url_for('main.index') }}">HyperBlend</a>
+        </div>
+        <div id="navbar" class="navbar-collapse">
+            <ul class="nav navbar-nav">
+                <li>
+                    <a href="{{ url_for('main.organisms_page') }}">
+                        <i class="fas fa-leaf"></i> Organisms
+                    </a>
+                    <span class="nav-count" id="organismCount">-</span>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.molecules_page') }}">
+                        <i class="fas fa-atom"></i> Molecules
+                    </a>
+                    <span class="nav-count" id="moleculeCount">-</span>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.index') }}">
+                        <i class="fas fa-home"></i> Home
+                    </a>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.targets_page') }}">
+                        <i class="fas fa-bullseye"></i> Targets
+                    </a>
+                    <span class="nav-count" id="targetCount">-</span>
+                </li>
+                <li>
+                    <a href="{{ url_for('main.effects_page') }}">
+                        <i class="fas fa-wave-square"></i> Effects
+                    </a>
+                    <span class="nav-count" id="effectCount">-</span>
+                </li>
+            </ul>
+        </div>
+        <form class="navbar-form" id="globalSearchForm" 
+              data-page-type="{{ request.endpoint.split('.')[-1] if request.endpoint else 'index' }}"
+              onsubmit="return false;">
+            <div class="form-group">
+                <input type="text" 
+                       class="form-control" 
+                       id="globalSearchInput"
+                       placeholder="Search {{ 'graph' if request.endpoint == 'main.index' else (item_type + 's' if item_type else '...') }}">
+            </div>
+        </form>
+    </div>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="content-wrapper">
+    {% block page_content %}{% endblock %}
+</div>
+{% endblock %}
+
+{% block footer %}
+<footer class="footer">
+    <div class="footer-content">
+        <div class="footer-copyright">
+            <p>&copy; {{ now.year }} HyperBlend. All rights reserved.</p>
+        </div>
+        <div class="footer-links">
+            <a href="https://github.com/yourusername/hyperblend" target="_blank">
+                <i class="fab fa-github"></i> GitHub
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.index') }}">
-                            <i class="fas fa-home"></i> Home
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.compounds_page') }}">
-                            <i class="fas fa-flask"></i> Compounds
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.sources_page') }}">
-                            <i class="fas fa-database"></i> Sources
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('main.targets_page') }}">
-                            <i class="fas fa-bullseye"></i> Targets
-                        </a>
-                    </li>
-                </ul>
-                {% block header_stats %}{% endblock %}
-                <form class="d-flex ms-auto">
-                    <input class="form-control me-2" type="search" placeholder="Search..." id="searchInput">
-                    <button class="btn btn-outline-light" type="submit">
-                        <i class="fas fa-search"></i>
-                    </button>
-                </form>
-            </div>
-        </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="container-fluid py-4">
-        {% block content %}{% endblock %}
-    </main>
-
-    <!-- Footer -->
-    <footer class="footer bg-dark text-light py-3 mt-auto">
-        <div class="container text-center">
-            <p class="mb-0">
-                &copy; 2024 HyperBlend | 
-                <a href="https://github.com/yourusername/hyperblend" class="text-light">
-                    <i class="fab fa-github"></i> GitHub
-                </a>
-            </p>
-        </div>
-    </footer>
-
-    <!-- Error Modal -->
-    <div class="modal fade" id="errorModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header bg-danger text-white">
-                    <h5 class="modal-title">Error</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body" id="errorModalBody"></div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                </div>
-            </div>
+            <a href="{{ url_for('main.sources_page') }}">
+                <i class="fas fa-database"></i> Data Sources
+            </a>
         </div>
     </div>
+</footer>
+{% endblock %}
 
-    <!-- Loading Spinner -->
-    <div id="loadingSpinner" class="loading-spinner d-none">
-        <div class="spinner-border text-primary" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
-    </div>
+{% block scripts %}
+{{ super() }}
+<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 
-    {% block extra_modals %}{% endblock %}
-</body>
-</html> 
+<script>
+// Debounce function to limit API calls
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+// Global search handler
+class GlobalSearch {
+    constructor() {
+        this.form = document.getElementById('globalSearchForm');
+        this.input = document.getElementById('globalSearchInput');
+        this.pageType = this.form.dataset.pageType;
+        this.setupEventListeners();
+    }
+
+    setupEventListeners() {
+        this.input.addEventListener('input', debounce(() => this.handleSearch(), 300));
+    }
+
+    async handleSearch() {
+        const query = this.input.value.trim();
+        
+        switch(this.pageType) {
+            case 'index':
+                await this.handleGraphSearch(query);
+                break;
+            case 'molecules_page':
+                await this.handleListSearch('molecules', query);
+                break;
+            case 'organisms_page':
+                await this.handleListSearch('organisms', query);
+                break;
+            case 'targets_page':
+                await this.handleListSearch('targets', query);
+                break;
+        }
+    }
+
+    async handleGraphSearch(query) {
+        try {
+            // If we're on the graph page and the graph object exists
+            if (window.app && window.app.graph) {
+                const response = await fetch(`/api/graph?q=${encodeURIComponent(query)}`);
+                const data = await response.json();
+                window.app.graph.updateData(data);
+            }
+        } catch (error) {
+            console.error('Error searching graph:', error);
+        }
+    }
+
+    async handleListSearch(type, query) {
+        try {
+            // If we're on a list page and the list page object exists
+            if (window.itemList) {
+                // The ListPage class already handles the search functionality
+                // Just update the search input value
+                const searchInput = document.getElementById('searchInput');
+                if (searchInput) {
+                    searchInput.value = query;
+                    // Trigger the input event to activate the list page's search handler
+                    searchInput.dispatchEvent(new Event('input'));
+                }
+            }
+        } catch (error) {
+            console.error(`Error searching ${type}:`, error);
+        }
+    }
+}
+
+// Initialize global search when the DOM is loaded
+document.addEventListener('DOMContentLoaded', () => {
+    new GlobalSearch();
+});
+</script>
+
+{% block extra_scripts %}{% endblock %}
+{% endblock %} 

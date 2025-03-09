@@ -1,79 +1,568 @@
-{% extends "base.html" %}
+{% extends "list_base.html" %}
 
-{% block title %}Targets - HyperBlend{% endblock %}
-
-{% block content %}
-<div class="container mx-auto px-4 py-8">
-    <h1 class="text-3xl font-bold mb-6">Biological Targets</h1>
-    
-    <!-- Search Bar -->
-    <div class="mb-6">
-        <input type="text" id="searchInput" 
-               class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" 
-               placeholder="Search targets...">
-    </div>
-
-    <!-- Targets List -->
-    <div id="targetsList" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        <!-- Targets will be dynamically added here -->
-    </div>
-</div>
-
-<!-- Target Template -->
-<template id="targetTemplate">
-    <div class="target-card bg-white p-4 rounded-lg shadow hover:shadow-md transition-shadow">
-        <h3 class="text-xl font-semibold mb-2"></h3>
-        <div class="text-sm text-gray-600 mb-2">
-            <p class="mb-1">Type: <span class="type"></span></p>
-            <p class="mb-1">Family: <span class="family"></span></p>
-            <p class="mb-1">Compounds: <span class="compound-count"></span></p>
-        </div>
-        <p class="text-sm text-gray-700 description line-clamp-3"></p>
-    </div>
-</template>
-
+{% block database_options %}
+<option value="">Select a database</option>
+<option value="uniprot">UniProt</option>
+<option value="chembl">ChEMBL</option>
+<option value="drugbank">DrugBank</option>
 {% endblock %}
 
 {% block scripts %}
+{{ super() }}
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const targetsList = document.getElementById('targetsList');
-    const targetTemplate = document.getElementById('targetTemplate');
-
-    // Load initial targets
-    loadTargets();
-
-    // Search functionality
-    let debounceTimer;
-    searchInput.addEventListener('input', function() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(() => {
-            loadTargets(this.value);
-        }, 300);
-    });
-
-    async function loadTargets(query = '') {
-        try {
-            const response = await fetch(`/api/targets?q=${encodeURIComponent(query)}`);
-            const targets = await response.json();
-            
-            targetsList.innerHTML = '';
-            targets.forEach(target => {
-                const card = targetTemplate.content.cloneNode(true);
-                
-                card.querySelector('h3').textContent = target.name;
-                card.querySelector('.type').textContent = target.type || 'N/A';
-                card.querySelector('.family').textContent = target.family || 'N/A';
-                card.querySelector('.compound-count').textContent = target.compound_count || '0';
-                card.querySelector('.description').textContent = target.description || 'No description available';
-                
-                targetsList.appendChild(card);
-            });
-        } catch (error) {
-            console.error('Error loading targets:', error);
+class TargetPage extends ListPage {
+    constructor() {
+        super('target');
+        this.enrichElementsInitialized = false;
+        this.selectedItemId = null;
+        
+        // Wait for DOM to be ready before initializing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.initialize());
+        } else {
+            this.initialize();
         }
     }
+
+    // Override loadItems to handle the correct response format
+    async loadItems(query = '') {
+        try {
+            const response = await fetch(`/api/targets?q=${encodeURIComponent(query)}`);
+            const data = await response.json();
+            if (data.error) {
+                throw new Error(data.error);
+            }
+            // Use data.targets instead of data.items
+            this.renderItems(data.targets || []);
+        } catch (error) {
+            console.error('Error loading targets:', error);
+            this.itemList.innerHTML = `
+                <div class="text-red-600 p-4">
+                    Error loading targets: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    // Override initialize to handle target-specific initialization
+    initialize() {
+        // Initialize base elements
+        this.searchInput = document.getElementById('searchInput');
+        this.itemList = document.getElementById('itemList');
+        this.addContainer = document.getElementById('addContainer');
+        this.infoContainer = document.getElementById('infoContainer');
+        this.infoContent = document.getElementById('infoContent');
+        this.databaseSelect = document.getElementById('databaseSelect');
+        this.idInput = document.getElementById('idInput');
+        this.searchButton = document.getElementById('searchButton');
+        this.previewSection = document.getElementById('previewSection');
+        this.confirmButton = document.getElementById('confirmAdd');
+        
+        // Initialize event listeners if elements exist
+        if (this.searchInput && this.itemList) {
+            this.initializeEventListeners();
+            // Load initial items after a short delay to ensure everything is ready
+            setTimeout(() => this.loadItems(), 100);
+        } else {
+            console.error('Required base elements not found during initialization');
+        }
+    }
+
+    // Override parent's initializeEventListeners
+    initializeEventListeners() {
+        if (!this.searchInput || !this.itemList) {
+            console.error('Required base elements not found');
+            return;
+        }
+
+        // Add search input event listener
+        this.searchInput.addEventListener('input', debounce(() => {
+            this.loadItems(this.searchInput.value);
+        }, 300));
+
+        if (this.databaseSelect && this.idInput && this.searchButton) {
+            this.searchButton.addEventListener('click', () => this.searchDatabase());
+        }
+
+        if (this.confirmButton) {
+            this.confirmButton.addEventListener('click', () => this.handleConfirm());
+        }
+    }
+
+    // Override renderItems to handle target-specific rendering
+    renderItems(items) {
+        if (!this.itemList) return;
+
+        if (!items || items.length === 0) {
+            this.itemList.innerHTML = `
+                <div class="text-gray-500 p-4 text-center">
+                    No targets found
+                </div>
+            `;
+            return;
+        }
+
+        this.itemList.innerHTML = items.map(item => `
+            <div class="item-card" 
+                 data-item-id="${item.id}"
+                 onclick="window.targetPage.handleItemClick('${item.id}')">
+                <h3 class="text-lg font-semibold">${item.name}</h3>
+                ${item.description ? `<p class="text-gray-600 mt-1">${item.description}</p>` : ''}
+                ${this.getItemSpecificHtml(item)}
+            </div>
+        `).join('');
+    }
+
+    // Add method to handle item clicks
+    async handleItemClick(itemId) {
+        try {
+            const response = await fetch(`/api/targets/${itemId}`);
+            if (!response.ok) throw new Error('Failed to load target details');
+            const data = await response.json();
+            this.showInfoContainer(data);
+
+            // Update selected state
+            const items = this.itemList.querySelectorAll('.item-card');
+            items.forEach(item => {
+                if (item.dataset.itemId === itemId) {
+                    item.classList.add('selected');
+                } else {
+                    item.classList.remove('selected');
+                }
+            });
+        } catch (error) {
+            console.error('Error loading target details:', error);
+        }
+    }
+
+    getItemSpecificHtml(item) {
+        return `
+            <div class="mt-2 space-y-2">
+                ${item.type ? `
+                <div>
+                    <p class="text-sm text-gray-500">Type</p>
+                    <p>${item.type}</p>
+                </div>
+                ` : ''}
+                ${item.organism ? `
+                <div>
+                    <p class="text-sm text-gray-500">Organism</p>
+                    <p class="italic">${item.organism}</p>
+                </div>
+                ` : ''}
+                ${item.compound_count ? `
+                <div>
+                    <p class="text-sm text-gray-500">Associated Molecules</p>
+                    <p>${item.compound_count} molecule${item.compound_count !== 1 ? 's' : ''}</p>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    getPreviewHtml(data) {
+        return `
+            <div class="space-y-3">
+                <div>
+                    <h3 class="font-semibold">${data.name}</h3>
+                    ${data.description ? `<p class="text-sm text-gray-600">${data.description}</p>` : ''}
+                </div>
+                ${data.type ? `
+                <div>
+                    <p class="text-sm text-gray-500">Type</p>
+                    <p>${data.type}</p>
+                </div>
+                ` : ''}
+                ${data.organism ? `
+                <div>
+                    <p class="text-sm text-gray-500">Organism</p>
+                    <p class="italic">${data.organism}</p>
+                </div>
+                ` : ''}
+                ${data.sequence ? `
+                <div>
+                    <p class="text-sm text-gray-500">Sequence</p>
+                    <p class="font-mono text-sm break-all">${data.sequence}</p>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    getItemInfoHtml(item) {
+        return `
+            <div class="space-y-4">
+                <div>
+                    <h3 class="font-semibold text-xl">${item.name}</h3>
+                    ${item.description ? `<p class="text-gray-600 mt-1">${item.description}</p>` : ''}
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Type</p>
+                        <p>${item.type || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Organism</p>
+                        <p class="italic">${item.organism || 'N/A'}</p>
+                    </div>
+                </div>
+
+                ${item.sequence ? `
+                <div>
+                    <p class="text-sm text-gray-500">Sequence</p>
+                    <p class="font-mono text-sm break-all">${item.sequence}</p>
+                </div>
+                ` : ''}
+
+                <div class="grid grid-cols-2 gap-4">
+                    ${item.uniprot_id ? `
+                    <div>
+                        <p class="text-sm text-gray-500">UniProt ID</p>
+                        <a href="https://www.uniprot.org/uniprot/${item.uniprot_id}" 
+                           target="_blank" 
+                           class="text-blue-600 hover:underline">
+                            ${item.uniprot_id}
+                        </a>
+                    </div>
+                    ` : ''}
+                    ${item.chembl_id ? `
+                    <div>
+                        <p class="text-sm text-gray-500">ChEMBL ID</p>
+                        <a href="https://www.ebi.ac.uk/chembl/target_report_card/${item.chembl_id}" 
+                           target="_blank" 
+                           class="text-blue-600 hover:underline">
+                            ${item.chembl_id}
+                        </a>
+                    </div>
+                    ` : ''}
+                </div>
+
+                ${item.compounds && item.compounds.length > 0 ? `
+                <div class="border-t pt-4">
+                    <h4 class="font-semibold mb-3">Associated Molecules</h4>
+                    <div class="grid grid-cols-1 gap-3">
+                        ${item.compounds.map(compound => `
+                            <div class="p-3 border rounded-lg">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">${compound.name}</p>
+                                        ${compound.smiles ? `
+                                            <p class="text-sm text-gray-500 font-mono mt-1">${compound.smiles}</p>
+                                        ` : ''}
+                                    </div>
+                                    ${compound.activity ? `
+                                        <span class="px-2 py-1 text-sm bg-blue-100 text-blue-800 rounded">
+                                            ${compound.activity}
+                                        </span>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold mb-3">Enrich Data</h4>
+                    <div class="space-y-3">
+                        <div class="form-group">
+                            <label for="enrichDatabaseSelect" class="text-sm font-medium text-gray-700">Database</label>
+                            <select id="enrichDatabaseSelect" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select a database</option>
+                                <option value="uniprot">UniProt</option>
+                                <option value="chembl">ChEMBL</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="enrichIdInput" class="text-sm font-medium text-gray-700">Identifier</label>
+                            <div class="search-bar">
+                                <input type="text" 
+                                       id="enrichIdInput" 
+                                       class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                       placeholder="Enter identifier">
+                                <button type="button"
+                                        id="enrichSearchButton" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                    <span class="button-content">
+                                        <span class="button-spinner"></span>
+                                        <span class="button-text">Search</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="enrichPreviewSection" class="preview-section hidden">
+                            <!-- Preview content will be shown here -->
+                        </div>
+                        <div class="flex justify-end mt-4">
+                            <button type="button" 
+                                    id="enrichConfirm" 
+                                    class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed" 
+                                    disabled>
+                                <span class="button-content">
+                                    <span class="button-spinner"></span>
+                                    <span class="button-text">Enrich Target</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold mb-3">Delete Data</h4>
+                    <div class="flex justify-end">
+                        <button type="button"
+                                id="deleteButton"
+                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                            Delete Target
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Override showInfoContainer to handle target-specific initialization
+    async showInfoContainer(itemId) {
+        if (!itemId) {
+            console.error('No item ID provided to showInfoContainer');
+            return;
+        }
+
+        this.selectedItemId = itemId;
+        
+        try {
+            const response = await fetch(`/api/targets/${itemId}`);
+            if (!response.ok) throw new Error('Failed to fetch target details');
+            
+            const data = await response.json();
+            
+            // Update info container
+            this.infoContent.innerHTML = this.getItemInfoHtml(data);
+            
+            // Show info container
+            this.addContainer.classList.add('hidden');
+            this.infoContainer.classList.remove('hidden');
+            
+            // Initialize enrich elements if not already done
+            if (!this.enrichElementsInitialized) {
+                this.initializeEnrichElements();
+            }
+            
+            // Add event listener for close button
+            const closeButton = document.getElementById('closeInfo');
+            if (closeButton) {
+                closeButton.addEventListener('click', () => this.hideInfoContainer());
+            }
+            
+            // Add event listener for delete button
+            const deleteButton = document.getElementById('deleteButton');
+            if (deleteButton) {
+                deleteButton.addEventListener('click', () => this.handleDelete(itemId));
+            }
+            
+        } catch (error) {
+            console.error('Error showing info container:', error);
+            // Show error message to user
+            this.showError('Failed to load target details');
+        }
+    }
+
+    // Initialize enrich-related elements
+    initializeEnrichElements() {
+        this.enrichDatabaseSelect = document.getElementById('enrichDatabaseSelect');
+        this.enrichIdInput = document.getElementById('enrichIdInput');
+        this.enrichSearchButton = document.getElementById('enrichSearchButton');
+        this.enrichPreviewSection = document.getElementById('enrichPreviewSection');
+        this.enrichConfirmButton = document.getElementById('enrichConfirm');
+
+        if (this.enrichSearchButton) {
+            this.enrichSearchButton.addEventListener('click', () => this.handleEnrichSearch());
+        }
+
+        if (this.enrichConfirmButton) {
+            this.enrichConfirmButton.addEventListener('click', () => this.handleEnrichConfirm());
+        }
+
+        this.enrichElementsInitialized = true;
+    }
+
+    // Handle enrichment search
+    async handleEnrichSearch() {
+        const database = this.enrichDatabaseSelect.value;
+        const identifier = this.enrichIdInput.value.trim();
+
+        if (!database || !identifier) {
+            this.showError('Please select a database and enter an identifier');
+            return;
+        }
+
+        this.setButtonLoading(this.enrichSearchButton, true);
+
+        try {
+            const response = await fetch(`/api/targets/search/${database}/${identifier}`);
+            if (!response.ok) throw new Error('Failed to fetch target data');
+            
+            const data = await response.json();
+            
+            this.enrichPreviewSection.innerHTML = this.getPreviewHtml(data);
+            this.enrichPreviewSection.classList.remove('hidden');
+            this.enrichConfirmButton.disabled = false;
+            
+        } catch (error) {
+            console.error('Error searching for target:', error);
+            this.showError('Failed to find target data');
+            this.enrichPreviewSection.classList.add('hidden');
+            this.enrichConfirmButton.disabled = true;
+        } finally {
+            this.setButtonLoading(this.enrichSearchButton, false);
+        }
+    }
+
+    // Handle enrichment confirmation
+    async handleEnrichConfirm() {
+        if (!this.selectedItemId) {
+            this.showError('No target selected for enrichment');
+            return;
+        }
+
+        this.setButtonLoading(this.enrichConfirmButton, true);
+
+        try {
+            const response = await fetch(`/api/targets/${this.selectedItemId}/enrich`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    database: this.enrichDatabaseSelect.value,
+                    identifier: this.enrichIdInput.value.trim()
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to enrich target');
+            
+            const result = await response.json();
+            
+            // Refresh the target details
+            await this.showInfoContainer(this.selectedItemId);
+            
+            // Show success message
+            this.showSuccess('Target data enriched successfully');
+            
+        } catch (error) {
+            console.error('Error enriching target:', error);
+            this.showError('Failed to enrich target data');
+        } finally {
+            this.setButtonLoading(this.enrichConfirmButton, false);
+        }
+    }
+
+    showSuccess(message) {
+        const successAlert = document.createElement('div');
+        successAlert.className = 'fixed bottom-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded';
+        successAlert.setAttribute('role', 'alert');
+        successAlert.innerHTML = message;
+        
+        document.body.appendChild(successAlert);
+        
+        // Remove the alert after 3 seconds
+        setTimeout(() => {
+            successAlert.remove();
+        }, 3000);
+    }
+
+    searchDatabase() {
+        const database = this.databaseSelect.value;
+        const id = this.idInput.value;
+
+        if (!database || !id) {
+            this.showError('Please select a database and enter an ID');
+            return;
+        }
+
+        // Show loading state
+        this.previewSection.innerHTML = '<div class="text-center py-4"><div class="spinner"></div></div>';
+        this.previewSection.classList.remove('hidden');
+
+        // Make the API call
+        fetch(`/api/targets/search/${database}/${id}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'error') {
+                    throw new Error(data.message);
+                }
+                if (data.targets && data.targets.length > 0) {
+                    const target = data.targets[0];  // Get the first target
+                    this.previewSection.innerHTML = this.getPreviewHtml(target);
+                    this.previewSection.classList.remove('hidden');
+                    this.confirmButton.classList.remove('hidden');
+                    this.currentPreviewData = target;
+                } else {
+                    throw new Error('No target found');
+                }
+            })
+            .catch(error => {
+                this.showError(error.message);
+                this.previewSection.classList.add('hidden');
+                this.confirmButton.classList.add('hidden');
+            });
+    }
+
+    async handleConfirm() {
+        if (!this.currentPreviewData) {
+            this.showError('No target data to add');
+            return;
+        }
+
+        try {
+            // Format the data to match the required fields
+            const targetData = {
+                uniprot_id: this.currentPreviewData.uniprot_id,
+                protein_name: this.currentPreviewData.name || this.currentPreviewData.protein_name,
+                organism: this.currentPreviewData.organism || '',
+                function: this.currentPreviewData.function || '',
+                ec_numbers: this.currentPreviewData.ec_numbers || [],
+                pathways: this.currentPreviewData.pathways || [],
+                diseases: this.currentPreviewData.diseases || []
+            };
+
+            const response = await fetch('/api/targets/add', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(targetData)
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.message || 'Failed to add target');
+            }
+
+            const result = await response.json();
+            
+            // Clear the form
+            this.databaseSelect.value = '';
+            this.idInput.value = '';
+            this.previewSection.classList.add('hidden');
+            this.confirmButton.classList.add('hidden');
+            
+            // Show success message and refresh the list
+            this.showSuccess('Target added successfully');
+            await this.loadItems();
+            
+        } catch (error) {
+            console.error('Error adding item:', error);
+            this.showError(error.message || 'Failed to add target');
+        }
+    }
+}
+
+// Initialize the page and store it in the window object for event handling
+document.addEventListener('DOMContentLoaded', () => {
+    window.targetPage = new TargetPage();
 });
 </script>
 {% endblock %} 

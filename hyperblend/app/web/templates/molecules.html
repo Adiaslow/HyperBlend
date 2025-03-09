@@ -1,0 +1,700 @@
+{% extends "list_base.html" %}
+
+{% block database_options %}
+<option value="">Select a database</option>
+<option value="pubchem">PubChem</option>
+<option value="chembl">ChEMBL</option>
+<option value="drugbank">DrugBank</option>
+{% endblock %}
+
+{% block info_actions %}
+<!-- Override parent template's info-actions to remove duplicate buttons -->
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+class MoleculePage extends ListPage {
+    constructor() {
+        super('molecule');
+        this.enrichElementsInitialized = false;
+        this.selectedItemId = null;
+        
+        // Wait for DOM to be ready before initializing
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this.initialize());
+        } else {
+            this.initialize();
+        }
+    }
+
+    // Override initialize to handle molecule-specific initialization
+    initialize() {
+        // Initialize enrich-related elements as null initially
+        this.enrichDatabaseSelect = null;
+        this.enrichIdInput = null;
+        this.enrichSearchButton = null;
+        this.enrichPreviewSection = null;
+        this.enrichConfirmButton = null;
+
+        // Initialize base elements
+        this.searchInput = document.getElementById('searchInput');
+        this.itemList = document.getElementById('itemList');
+        this.addContainer = document.getElementById('addContainer');
+        this.infoContainer = document.getElementById('infoContainer');
+        this.infoContent = document.getElementById('infoContent');
+        
+        // Only proceed if required elements exist
+        if (this.searchInput && this.itemList) {
+            this.initializeEventListeners();
+            // Load initial items after a short delay to ensure everything is ready
+            setTimeout(() => this.loadItems(), 100);
+        } else {
+            console.error('Required base elements not found during initialization');
+        }
+
+        // Bind relationship management functions to window
+        window.addRelationship = (moleculeId) => this.addRelationship(moleculeId);
+        window.deleteRelationship = (moleculeId, targetId) => this.deleteRelationship(moleculeId, targetId);
+    }
+
+    // Override parent's initializeEventListeners
+    initializeEventListeners() {
+        if (!this.searchInput || !this.itemList) {
+            console.error('Required base elements not found');
+            return;
+        }
+
+        // Add search input event listener
+        this.searchInput.addEventListener('input', debounce(() => {
+            this.loadItems(this.searchInput.value);
+        }, 300));
+    }
+
+    showInfoContainer(item) {
+        if (!item || !item.id) {
+            console.error('Invalid item or missing item ID');
+            return;
+        }
+        
+        // Set the selected item ID
+        this.selectedItemId = item.id;
+        
+        // Hide add container and show info container
+        if (this.addContainer) this.addContainer.classList.add('hidden');
+        if (this.infoContainer) this.infoContainer.classList.remove('hidden');
+        
+        // Update info content
+        if (this.infoContent) {
+            this.infoContent.innerHTML = this.getItemInfoHtml(item);
+            
+            // Initialize enrich elements after content is updated
+            if (!this.enrichElementsInitialized) {
+                setTimeout(() => this.initializeEnrichElements(), 0);
+            } else {
+                // Re-initialize enrich elements to ensure proper event binding
+                this.initializeEnrichElements();
+            }
+
+            // Load targets for the relationship form
+            this.loadTargets();
+        }
+    }
+
+    initializeEnrichElements() {
+        // Initialize enrich-related elements
+        this.enrichDatabaseSelect = document.getElementById('enrichDatabaseSelect');
+        this.enrichIdInput = document.getElementById('enrichIdInput');
+        this.enrichSearchButton = document.getElementById('enrichSearchButton');
+        this.enrichPreviewSection = document.getElementById('enrichPreviewSection');
+        this.enrichConfirmButton = document.getElementById('enrichConfirm');
+        
+        // Only initialize enrich event listeners if all elements exist
+        if (this.enrichDatabaseSelect && 
+            this.enrichIdInput && 
+            this.enrichSearchButton && 
+            this.enrichPreviewSection && 
+            this.enrichConfirmButton) {
+            this.initializeEnrichEventListeners();
+            this.enrichElementsInitialized = true;
+        } else {
+            console.error('One or more enrich elements not found');
+        }
+    }
+
+    initializeEnrichEventListeners() {
+        // Safety check for required elements
+        if (!this.enrichDatabaseSelect || 
+            !this.enrichIdInput || 
+            !this.enrichSearchButton || 
+            !this.enrichPreviewSection || 
+            !this.enrichConfirmButton) {
+            console.error('Required enrich elements not found');
+            return;
+        }
+
+        // Remove any existing event listeners
+        const newEnrichDatabaseSelect = this.enrichDatabaseSelect.cloneNode(true);
+        const newEnrichSearchButton = this.enrichSearchButton.cloneNode(true);
+        const newEnrichIdInput = this.enrichIdInput.cloneNode(true);
+        const newEnrichConfirmButton = this.enrichConfirmButton.cloneNode(true);
+
+        this.enrichDatabaseSelect.parentNode.replaceChild(newEnrichDatabaseSelect, this.enrichDatabaseSelect);
+        this.enrichSearchButton.parentNode.replaceChild(newEnrichSearchButton, this.enrichSearchButton);
+        this.enrichIdInput.parentNode.replaceChild(newEnrichIdInput, this.enrichIdInput);
+        this.enrichConfirmButton.parentNode.replaceChild(newEnrichConfirmButton, this.enrichConfirmButton);
+
+        // Update references to new elements
+        this.enrichDatabaseSelect = newEnrichDatabaseSelect;
+        this.enrichSearchButton = newEnrichSearchButton;
+        this.enrichIdInput = newEnrichIdInput;
+        this.enrichConfirmButton = newEnrichConfirmButton;
+
+        // Add event listeners to new elements
+        this.enrichDatabaseSelect.addEventListener('change', () => {
+            this.clearEnrichPreview();
+            this.enrichConfirmButton.disabled = true;
+        });
+
+        this.enrichSearchButton.addEventListener('click', () => this.searchEnrichDatabase());
+        
+        this.enrichIdInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.searchEnrichDatabase();
+            }
+        });
+        
+        this.enrichConfirmButton.addEventListener('click', () => this.handleEnrichConfirm());
+    }
+
+    async loadItems(query = '') {
+        try {
+            const response = await fetch(`/api/molecules?q=${encodeURIComponent(query)}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse JSON:', text);
+                throw new Error('Invalid JSON response from server');
+            }
+            
+            // Ensure we're passing an array to renderItems
+            const items = Array.isArray(data) ? data : (data.items || []);
+            this.renderItems(items);
+        } catch (error) {
+            console.error('Error loading molecules:', error);
+            this.itemList.innerHTML = `
+                <div class="text-red-600 p-4">
+                    Error loading molecules: ${error.message}
+                </div>
+            `;
+        }
+    }
+
+    clearEnrichPreview() {
+        this.enrichPreviewSection.classList.add('hidden');
+        this.enrichPreviewSection.innerHTML = '';
+    }
+
+    async searchEnrichDatabase() {
+        const database = this.enrichDatabaseSelect.value;
+        const id = this.enrichIdInput.value.trim();
+
+        if (!database || !id) {
+            this.showEnrichError('Please select a database and enter an identifier');
+            return;
+        }
+
+        try {
+            this.setButtonLoading(this.enrichSearchButton, true);
+            this.enrichPreviewSection.innerHTML = `
+                <div class="flex items-center justify-center p-4">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+                </div>
+            `;
+            this.enrichPreviewSection.classList.remove('hidden');
+
+            const response = await fetch(`/api/molecules/search/${database}/${encodeURIComponent(id)}`);
+            const data = await response.json();
+
+            if (response.ok) {
+                this.enrichPreviewSection.innerHTML = this.getPreviewHtml(data);
+                this.enrichConfirmButton.disabled = false;
+            } else {
+                this.showEnrichError(data.error || 'Failed to find molecule');
+                this.enrichConfirmButton.disabled = true;
+            }
+        } catch (error) {
+            console.error('Error searching database:', error);
+            this.showEnrichError('Error searching database');
+            this.enrichConfirmButton.disabled = true;
+        } finally {
+            this.setButtonLoading(this.enrichSearchButton, false);
+        }
+    }
+
+    showEnrichError(message) {
+        this.enrichPreviewSection.innerHTML = `
+            <div class="text-red-600 p-4">
+                ${message}
+            </div>
+        `;
+        this.enrichPreviewSection.classList.remove('hidden');
+    }
+
+    async handleEnrichConfirm() {
+        if (!this.selectedItemId) {
+            console.error('No molecule selected for enrichment');
+            this.showEnrichError('No molecule selected for enrichment');
+            return;
+        }
+
+        const database = this.enrichDatabaseSelect.value;
+        const id = this.enrichIdInput.value;
+
+        if (!database || !id) {
+            this.showEnrichError('Please select a database and enter an ID');
+            return;
+        }
+
+        try {
+            this.setButtonLoading(this.enrichConfirmButton, true);
+            const response = await fetch(`/api/molecules/${this.selectedItemId}/enrich`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: database,
+                    identifier: id
+                })
+            });
+
+            const data = await response.json();
+            
+            if (response.ok) {
+                this.clearEnrichPreview();
+                this.enrichDatabaseSelect.value = '';
+                this.enrichIdInput.value = '';
+                this.enrichConfirmButton.disabled = true;
+                await this.loadItemDetails(this.selectedItemId);
+            } else {
+                this.showEnrichError(data.error || 'Error enriching molecule');
+            }
+        } catch (error) {
+            console.error('Error enriching molecule:', error);
+            this.showEnrichError('Error enriching molecule');
+        } finally {
+            this.setButtonLoading(this.enrichConfirmButton, false);
+        }
+    }
+
+    async loadItemDetails(itemId) {
+        try {
+            const response = await fetch(`/api/molecules/${itemId}`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            const text = await response.text();
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                console.error('Failed to parse JSON:', text);
+                throw new Error('Invalid JSON response from server');
+            }
+
+            // Update the info container with new data
+            this.showInfoContainer(data);
+            
+            // Update the item in the list if it exists
+            const itemCard = this.itemList.querySelector(`[data-item-id="${itemId}"]`);
+            if (itemCard) {
+                itemCard.innerHTML = `
+                    <h3 class="text-lg font-semibold">${data.name}</h3>
+                    ${data.description ? `<p class="text-gray-600 mt-1">${data.description}</p>` : ''}
+                    ${this.getItemSpecificHtml(data)}
+                `;
+            }
+            
+            return data;
+        } catch (error) {
+            console.error('Error loading item details:', error);
+            if (this.infoContent) {
+                this.infoContent.innerHTML = `
+                    <div class="text-red-600 p-4">
+                        Error loading item details: ${error.message}
+                    </div>
+                `;
+            }
+            throw error;
+        }
+    }
+
+    getItemSpecificHtml(item) {
+        return `
+            <div class="mt-2 grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-gray-500">Formula</p>
+                    <p class="font-mono">${item.formula || 'N/A'}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Molecular Weight</p>
+                    <p>${item.molecular_weight ? `${item.molecular_weight} g/mol` : 'N/A'}</p>
+                </div>
+                ${item.smiles ? `
+                <div class="col-span-2">
+                    <p class="text-sm text-gray-500">SMILES</p>
+                    <p class="font-mono text-sm break-all">${item.smiles}</p>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    getPreviewHtml(data) {
+        return `
+            <div class="space-y-3">
+                <div>
+                    <h3 class="font-semibold">${data.name}</h3>
+                    ${data.description ? `<p class="text-sm text-gray-600">${data.description}</p>` : ''}
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Formula</p>
+                        <p class="font-mono">${data.formula || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Molecular Weight</p>
+                        <p>${data.molecular_weight ? `${data.molecular_weight} g/mol` : 'N/A'}</p>
+                    </div>
+                </div>
+                ${data.smiles ? `
+                <div>
+                    <p class="text-sm text-gray-500">SMILES</p>
+                    <p class="font-mono text-sm break-all">${data.smiles}</p>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    getItemInfoHtml(item) {
+        return `
+            <div class="space-y-4">
+                <div>
+                    <h3 class="font-semibold text-xl">${item.name}</h3>
+                    ${item.description ? `<p class="text-gray-600 mt-1">${item.description}</p>` : ''}
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <p class="text-sm text-gray-500">Formula</p>
+                        <p class="font-mono">${item.formula || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <p class="text-sm text-gray-500">Molecular Weight</p>
+                        <p>${item.molecular_weight ? `${item.molecular_weight} g/mol` : 'N/A'}</p>
+                    </div>
+                </div>
+
+                ${item.smiles ? `
+                <div>
+                    <p class="text-sm text-gray-500">SMILES</p>
+                    <p class="font-mono text-sm break-all">${item.smiles}</p>
+                </div>
+                ` : ''}
+
+                ${item.inchi ? `
+                <div>
+                    <p class="text-sm text-gray-500">InChI</p>
+                    <p class="font-mono text-sm break-all">${item.inchi}</p>
+                </div>
+                ` : ''}
+
+                ${item.inchikey ? `
+                <div>
+                    <p class="text-sm text-gray-500">InChIKey</p>
+                    <p class="font-mono">${item.inchikey}</p>
+                </div>
+                ` : ''}
+
+                <div class="grid grid-cols-2 gap-4">
+                    ${item.logp !== undefined ? `
+                    <div>
+                        <p class="text-sm text-gray-500">LogP</p>
+                        <p>${item.logp}</p>
+                    </div>
+                    ` : ''}
+                    ${item.polar_surface_area !== undefined ? `
+                    <div>
+                        <p class="text-sm text-gray-500">Polar Surface Area</p>
+                        <p>${item.polar_surface_area} Å²</p>
+                    </div>
+                    ` : ''}
+                </div>
+
+                <div class="grid grid-cols-2 gap-4">
+                    ${item.pubchem_cid ? `
+                    <div>
+                        <p class="text-sm text-gray-500">PubChem CID</p>
+                        <a href="https://pubchem.ncbi.nlm.nih.gov/compound/${item.pubchem_cid}" 
+                           target="_blank" 
+                           class="text-blue-600 hover:underline">
+                            ${item.pubchem_cid}
+                        </a>
+                    </div>
+                    ` : ''}
+                    ${item.chembl_id ? `
+                    <div>
+                        <p class="text-sm text-gray-500">ChEMBL ID</p>
+                        <a href="https://www.ebi.ac.uk/chembl/compound_report_card/${item.chembl_id}" 
+                           target="_blank" 
+                           class="text-blue-600 hover:underline">
+                            ${item.chembl_id}
+                        </a>
+                    </div>
+                    ` : ''}
+                </div>
+
+                ${item.synonyms && item.synonyms.length > 0 ? `
+                <div>
+                    <p class="text-sm text-gray-500">Synonyms</p>
+                    <div class="mt-1 flex flex-wrap gap-2">
+                        ${item.synonyms.map(syn => `
+                            <span class="inline-flex items-center px-2 py-1 rounded-md text-sm font-medium bg-gray-100">
+                                ${syn}
+                            </span>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                ${item.source ? `
+                <div>
+                    <p class="text-sm text-gray-500">Source</p>
+                    <p>${item.source}</p>
+                </div>
+                ` : ''}
+
+                ${item.relationships && item.relationships.length > 0 ? `
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold text-lg mb-3">Relationships</h4>
+                    <div class="space-y-3">
+                        ${item.relationships.map(rel => `
+                            <div class="bg-gray-50 p-3 rounded-lg">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="font-medium">${rel.name || rel.target_name || 'Unknown Target'}</p>
+                                        <p class="text-sm text-gray-600">Type: ${rel.relationship_type}</p>
+                                        ${rel.activity_type ? `<p class="text-sm text-gray-600">Activity: ${rel.activity_type}</p>` : ''}
+                                        ${rel.activity_value ? `<p class="text-sm text-gray-600">Value: ${rel.activity_value} ${rel.activity_unit || ''}</p>` : ''}
+                                        <p class="text-sm text-gray-500">Confidence: ${rel.confidence_score}</p>
+                                    </div>
+                                    <button 
+                                        onclick="deleteRelationship('${item.id}', '${rel.id}')"
+                                        class="text-red-600 hover:text-red-800 text-sm">
+                                        Delete
+                                    </button>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+                ` : ''}
+
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold text-lg mb-3">Add Relationship</h4>
+                    <div class="space-y-3">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Target</label>
+                                <select id="targetSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="">Select a target...</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700">Activity Type</label>
+                                <select id="activityTypeSelect" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                    <option value="">Unknown</option>
+                                    <option value="agonist">Agonist</option>
+                                    <option value="antagonist">Antagonist</option>
+                                    <option value="partial_agonist">Partial Agonist</option>
+                                    <option value="inverse_agonist">Inverse Agonist</option>
+                                    <option value="inhibitor">Inhibitor</option>
+                                    <option value="activator">Activator</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Activity Value (optional)</label>
+                            <input type="text" id="activityValueInput" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" placeholder="e.g., IC50 = 10 nM">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Confidence Score</label>
+                            <input type="number" id="confidenceScoreInput" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" min="0" max="1" step="0.1" value="0.5">
+                        </div>
+                        <button 
+                            onclick="addRelationship('${item.id}')"
+                            class="w-full px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                            Add Relationship
+                        </button>
+                    </div>
+                </div>
+
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold mb-3">Enrich Data</h4>
+                    <div class="space-y-3">
+                        <div class="form-group">
+                            <label for="enrichDatabaseSelect" class="text-sm font-medium text-gray-700">Database</label>
+                            <select id="enrichDatabaseSelect" 
+                                    class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                <option value="">Select a database</option>
+                                <option value="pubchem">PubChem</option>
+                                <option value="chembl">ChEMBL</option>
+                                <option value="drugbank">DrugBank</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="enrichIdInput" class="text-sm font-medium text-gray-700">Identifier</label>
+                            <div class="search-bar">
+                                <input type="text" 
+                                       id="enrichIdInput" 
+                                       class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                       placeholder="Enter identifier">
+                                <button type="button"
+                                        id="enrichSearchButton" 
+                                        class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                    <span class="button-content">
+                                        <span class="button-spinner"></span>
+                                        <span class="button-text">Search</span>
+                                    </span>
+                                </button>
+                            </div>
+                        </div>
+                        <div id="enrichPreviewSection" class="preview-section hidden">
+                            <!-- Preview content will be shown here -->
+                        </div>
+                        <div class="flex justify-end mt-4">
+                            <button type="button" 
+                                    id="enrichConfirm" 
+                                    class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed" 
+                                    disabled>
+                                <span class="button-content">
+                                    <span class="button-spinner"></span>
+                                    <span class="button-text">Enrich Molecule</span>
+                                </span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="border-t pt-4 mt-4">
+                    <h4 class="font-semibold mb-3">Delete Data</h4>
+                    <div class="flex justify-end">
+                        <button type="button"
+                                id="deleteButton"
+                                class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                            Delete Molecule
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    // Add helper functions for relationship management
+    async loadTargets() {
+        try {
+            const response = await fetch('/api/targets');
+            if (!response.ok) throw new Error('Failed to load targets');
+            const data = await response.json();
+            const targets = data.targets || [];
+            const select = document.getElementById('targetSelect');
+            select.innerHTML = '<option value="">Select a target...</option>' +
+                targets.map(target => `<option value="${target.id}">${target.name}</option>`).join('');
+        } catch (error) {
+            console.error('Error loading targets:', error);
+        }
+    }
+
+    async addRelationship(moleculeId) {
+        const targetId = document.getElementById('targetSelect').value;
+        const activityType = document.getElementById('activityTypeSelect').value;
+        const activityValue = document.getElementById('activityValueInput').value;
+        const confidenceScore = document.getElementById('confidenceScoreInput').value;
+
+        if (!targetId) {
+            alert('Please select a target');
+            return;
+        }
+
+        try {
+            const response = await fetch('/api/relationships', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    source_id: moleculeId,
+                    target_id: targetId,
+                    relationship_type: 'INTERACTS_WITH',
+                    activity_type: activityType || undefined,
+                    activity_value: activityValue || undefined,
+                    confidence_score: parseFloat(confidenceScore)
+                })
+            });
+
+            if (!response.ok) throw new Error('Failed to add relationship');
+            
+            // Refresh the molecule details
+            const moleculeResponse = await fetch(`/api/molecules/${moleculeId}`);
+            if (!moleculeResponse.ok) throw new Error('Failed to refresh molecule data');
+            const data = await moleculeResponse.json();
+            this.showInfoContainer(data);
+        } catch (error) {
+            console.error('Error adding relationship:', error);
+            alert('Failed to add relationship');
+        }
+    }
+
+    async deleteRelationship(moleculeId, targetId) {
+        if (!moleculeId || !targetId) {
+            console.error('Invalid molecule or target ID');
+            alert('Cannot delete relationship: Invalid IDs');
+            return;
+        }
+
+        if (!confirm('Are you sure you want to delete this relationship?')) return;
+
+        try {
+            const response = await fetch(`/api/relationships/${moleculeId}/${targetId}`, {
+                method: 'DELETE'
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.message || 'Failed to delete relationship');
+            }
+            
+            // Refresh the molecule details
+            const moleculeResponse = await fetch(`/api/molecules/${moleculeId}`);
+            if (!moleculeResponse.ok) throw new Error('Failed to refresh molecule data');
+            const data = await moleculeResponse.json();
+            this.showInfoContainer(data);
+        } catch (error) {
+            console.error('Error deleting relationship:', error);
+            alert(error.message || 'Failed to delete relationship');
+        }
+    }
+}
+
+// Initialize the page
+document.addEventListener('DOMContentLoaded', () => {
+    new MoleculePage();
+});
+</script>
+{% endblock %} 

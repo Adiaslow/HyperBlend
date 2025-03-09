@@ -9,11 +9,20 @@ class GraphVisualization {
             return;
         }
 
+        this.initialized = false;
+        this.initialize();
+    }
+
+    initialize() {
+        if (!this.container) {
+            return;
+        }
+
         // Initialize layout
         this.width = this.container.clientWidth || 800;
         this.height = this.container.clientHeight || 600;
         console.log('Graph dimensions:', this.width, 'x', this.height);
-        
+
         // Create SVG container
         this.svg = d3.select(this.container)
             .append('svg')
@@ -23,30 +32,26 @@ class GraphVisualization {
         // Create a group for zooming
         this.g = this.svg.append('g');
 
-        // Initialize layout based on available libraries
-        if (typeof cola !== 'undefined') {
-            console.log('Using WebCola layout engine');
-            this.layout = cola.d3adaptor()
-                .size([this.width, this.height])
-                .linkDistance(100)
-                .avoidOverlaps(true)
-                .convergenceThreshold(0.01)
-                .symmetricDiffLinkLengths(5)
-                .flowLayout('y', 80)
-                .jaccardLinkLengths(40, 0.7);
-        } else {
-            console.log('WebCola not available, falling back to D3 force simulation');
-            this.layout = d3.forceSimulation()
-                .force('link', d3.forceLink().id(d => d.id).distance(100))
-                .force('charge', d3.forceManyBody().strength(-200))
-                .force('center', d3.forceCenter(this.width / 2, this.height / 2))
-                .force('collision', d3.forceCollide().radius(50))
-                .force('x', d3.forceX(this.width / 2).strength(0.1))
-                .force('y', d3.forceY(this.height / 2).strength(0.1));
-        }
-
-        // Create event emitter
+        // Initialize event emitter
         this.eventEmitter = new EventEmitter();
+
+        // Initialize layout based on available libraries
+        console.log('Using D3 force simulation');
+        this.layout = d3.forceSimulation()
+            .force('link', d3.forceLink().id(d => d.id)
+                .distance(150)
+                .strength(0.7))
+            .force('charge', d3.forceManyBody()
+                .strength(-2000)
+                .distanceMax(1000))
+            .force('collide', d3.forceCollide()
+                .radius(60)
+                .strength(0.7))
+            .force('center', d3.forceCenter(0, 0).strength(0.05))  // Gentle central force
+            .force('x', d3.forceX(0).strength(0.02))  // Very gentle x-centering
+            .force('y', d3.forceY(0).strength(0.02))  // Very gentle y-centering
+            .alphaDecay(0.01)  // Slower decay for more movement
+            .velocityDecay(0.3);  // Less friction
 
         // Bind methods
         this.handleNodeClick = this.handleNodeClick.bind(this);
@@ -57,9 +62,9 @@ class GraphVisualization {
 
         // Add zoom behavior
         const zoom = d3.zoom()
-            .scaleExtent([0.2, 4])  // Increased minimum zoom level
+            .scaleExtent([0.1, 8])  // Allow more zoom range
             .on('zoom', this.handleZoom);
-        
+
         // Initialize with identity transform to prevent initial jump
         this.svg.call(zoom)
             .call(zoom.transform, d3.zoomIdentity);
@@ -67,7 +72,8 @@ class GraphVisualization {
         // Store zoom function for later use
         this.zoom = zoom;
 
-        console.log('Graph visualization initialized');
+        this.initialized = true;
+        console.log('Graph visualization initialized successfully');
     }
 
     updateData(data) {
@@ -81,97 +87,189 @@ class GraphVisualization {
             return;
         }
 
-        console.log('Updating graph with data:', data);
+        console.log('Raw data received:', JSON.stringify(data, null, 2));
+        console.log('Number of nodes:', data.nodes.length);
+        console.log('Number of links:', data.links.length);
+
+        // Format data for D3
+        const nodes = data.nodes.map(node => ({
+            ...node,
+            // Initialize position if not set
+            x: node.x || Math.random() * this.width,
+            y: node.y || Math.random() * this.height,
+            width: node.width || 30  // Ensure nodes have a default width
+        }));
+
+        const links = data.links.map(link => {
+            console.log('Processing link:', link);
+            const source = typeof link.source === 'object' ? link.source.id : link.source;
+            const target = typeof link.target === 'object' ? link.target.id : link.target;
+            
+            return {
+                ...link,
+                source: source,
+                target: target,
+                weight: link.weight || 1
+            };
+        });
+
+        console.log('Processed nodes:', nodes);
+        console.log('Processed links:', links);
 
         // Clear existing elements
         this.g.selectAll('*').remove();
 
-        // Create link elements
-        const links = this.g.append('g')
-            .selectAll('line')
-            .data(data.links)
-            .enter()
-            .append('line')
-            .attr('stroke', '#999')
-            .attr('stroke-opacity', 0.6)
-            .attr('stroke-width', 1);
+        // Create arrow marker for each activity type
+        const markerColors = {
+            'agonist': '#22C55E',
+            'antagonist': '#DC2626',
+            'partial_agonist': '#84CC16',
+            'inverse_agonist': '#EA580C',
+            'inhibitor': '#7C3AED',  // Violet color for inhibitors
+            'activator': '#2563EB',  // Blue color for activators
+            'default': '#94A3B8'
+        };
 
-        // Create node elements
-        const nodes = this.g.append('g')
-            .selectAll('circle')
-            .data(data.nodes)
+        // Create markers for each color
+        const defs = this.g.append('defs');
+        Object.entries(markerColors).forEach(([type, color]) => {
+            defs.append('marker')
+                .attr('id', `arrow-${type}`)
+                .attr('viewBox', '0 -5 10 10')
+                .attr('refX', 25)
+                .attr('refY', 0)
+                .attr('markerWidth', 6)
+                .attr('markerHeight', 6)
+                .attr('orient', 'auto')
+                .append('path')
+                .attr('d', 'M0,-5L10,0L0,5')
+                .attr('fill', color);
+        });
+
+        // Create link elements with tooltips
+        const linkGroup = this.g.append('g')
+            .attr('class', 'links');
+
+        const linkElements = linkGroup.selectAll('g')
+            .data(links)
             .enter()
-            .append('circle')
-            .attr('r', d => d.width / 2 || 15)
-            .attr('fill', d => this.getNodeColor(d.type))
+            .append('g')
+            .attr('class', 'link-group');
+
+        // Add the actual line elements
+        linkElements.append('line')
+            .attr('class', 'link')
+            .attr('stroke', d => this.getEdgeColor(d))
+            .attr('stroke-opacity', 0.8)
+            .attr('stroke-width', 2)
+            .attr('marker-end', d => {
+                const type = d.activity_type ? d.activity_type.toLowerCase() : 'default';
+                return `url(#arrow-${type})`;
+            });
+
+        // Add tooltips for links
+        linkElements.append('title')
+            .text(d => {
+                let tooltip = d.type || 'Relationship';
+                if (d.activity_type) tooltip += `\nActivity: ${d.activity_type}`;
+                if (d.activity_value) tooltip += `\nValue: ${d.activity_value}`;
+                return tooltip;
+            });
+
+        // Create node elements with tooltips
+        const nodeGroup = this.g.append('g')
+            .selectAll('g')
+            .data(nodes)
+            .enter()
+            .append('g')
             .call(d3.drag()
                 .on('start', this.handleDragStart)
                 .on('drag', this.handleDrag)
                 .on('end', this.handleDragEnd))
             .on('click', this.handleNodeClick);
 
-        // Add node labels
-        const labels = this.g.append('g')
-            .selectAll('text')
-            .data(data.nodes)
-            .enter()
-            .append('text')
+        const nodeElements = nodeGroup.append('circle')
+            .attr('r', d => d.width / 2)
+            .attr('fill', d => this.getNodeColor(d.type));
+
+        // Add tooltips for nodes
+        nodeGroup.append('title')
+            .text(d => {
+                let tooltip = `${d.name} (${d.type})`;
+                if (d.smiles) tooltip += `\nSMILES: ${d.smiles}`;
+                if (d.molecular_weight) tooltip += `\nMW: ${d.molecular_weight}`;
+                if (d.formula) tooltip += `\nFormula: ${d.formula}`;
+                if (d.description) tooltip += `\nDescription: ${d.description}`;
+                return tooltip;
+            });
+
+        // Add node labels with background
+        const labels = nodeGroup.append('g')
+            .attr('class', 'label');
+
+        // Add white background for better readability
+        labels.append('text')
+            .text(d => d.name || 'Unknown')
+            .attr('font-size', '12px')
+            .attr('dx', 8)
+            .attr('dy', 3)
+            .attr('stroke', 'white')
+            .attr('stroke-width', 3)
+            .attr('stroke-opacity', 0.8);
+
+        // Add actual text
+        labels.append('text')
             .text(d => d.name || 'Unknown')
             .attr('font-size', '12px')
             .attr('dx', 8)
             .attr('dy', 3);
 
-        // Update layout based on type
-        if (typeof cola !== 'undefined') {
-            // WebCola layout
-            this.layout
-                .nodes(data.nodes)
-                .links(data.links)
-                .start(50, 0, 50);
+        // D3 force simulation
+        this.layout
+            .nodes(nodes)
+            .force('link').links(links);
 
-            // Update positions on each tick
-            this.layout.on('tick', () => {
-                links
-                    .attr('x1', d => d.source.x)
-                    .attr('y1', d => d.source.y)
-                    .attr('x2', d => d.target.x)
-                    .attr('y2', d => d.target.y);
+        // Set up the tick handler
+        this.layout.on('tick', () => {
+            linkElements.select('line')
+                .attr('x1', d => d.source.x)
+                .attr('y1', d => d.source.y)
+                .attr('x2', d => d.target.x)
+                .attr('y2', d => d.target.y);
 
-                nodes
-                    .attr('cx', d => d.x)
-                    .attr('cy', d => d.y);
+            nodeGroup
+                .attr('transform', d => `translate(${d.x},${d.y})`);
+        });
 
-                labels
-                    .attr('x', d => d.x)
-                    .attr('y', d => d.y);
+        // Create drag behavior
+        const drag = d3.drag()
+            .on('start', (event, d) => {
+                if (!event.active) this.layout.alphaTarget(0.3).restart();
+                d.fx = d.x;
+                d.fy = d.y;
+            })
+            .on('drag', (event, d) => {
+                d.fx = event.x;
+                d.fy = event.y;
+            })
+            .on('end', (event, d) => {
+                if (!event.active) this.layout.alphaTarget(0);
+                d.fx = null;
+                d.fy = null;
             });
-        } else {
-            // D3 force simulation
-            this.layout
-                .nodes(data.nodes)
-                .on('tick', () => {
-                    links
-                        .attr('x1', d => d.source.x)
-                        .attr('y1', d => d.source.y)
-                        .attr('x2', d => d.target.x)
-                        .attr('y2', d => d.target.y);
 
-                    nodes
-                        .attr('cx', d => d.x)
-                        .attr('cy', d => d.y);
+        // Apply drag behavior to nodes
+        nodeGroup.call(drag);
 
-                    labels
-                        .attr('x', d => d.x)
-                        .attr('y', d => d.y);
-                });
+        // Start the simulation
+        this.layout.alpha(1).restart();
 
-            this.layout.force('link')
-                .links(data.links)
-                .id(d => d.id)
-                .distance(d => d.weight || 100);
+        // Store the nodes and links for later use
+        this.nodes = nodes;
+        this.links = links;
 
-            this.layout.alpha(1).restart();
-        }
+        // Update the legend to include relationship types
+        this.updateLegend();
 
         // Fit the graph to the viewport after a short delay
         setTimeout(() => {
@@ -185,28 +283,47 @@ class GraphVisualization {
 
             if (width === 0 || height === 0) return;
 
-            // Adjust scale calculation to prevent too small initial view
             const scale = Math.min(2, 0.9 / Math.max(width / fullWidth, height / fullHeight));
             const translate = [fullWidth / 2 - scale * midX, fullHeight / 2 - scale * midY];
 
-            // Apply the initial transform with a smoother transition
             this.svg.transition()
                 .duration(1000)
                 .call(this.zoom.transform, d3.zoomIdentity
                     .translate(translate[0], translate[1])
                     .scale(scale));
-        }, 200);  // Increased delay for better initial layout
+        }, 200);
 
         console.log('Graph data updated successfully');
     }
 
     getNodeColor(type) {
         const colors = {
-            'Compound': '#4CAF50',
-            'Source': '#2196F3',
-            'Target': '#F44336',
-            'default': '#9E9E9E'
+            'Molecule': '#10B981',  // Tailwind green-500
+            'Organism': '#3B82F6',  // Tailwind blue-500
+            'Target': '#EF4444',    // Tailwind red-500
+            'default': '#94A3B8'    // Tailwind gray-400
         };
+        return colors[type] || colors.default;
+    }
+
+    getEdgeColor(relationship) {
+        const type = relationship && relationship.activity_type ? 
+            relationship.activity_type.toLowerCase() : 
+            (relationship && relationship.type ? relationship.type.toLowerCase() : 'default');
+        
+        const colors = {
+            'agonist': '#22C55E',
+            'antagonist': '#DC2626',
+            'partial_agonist': '#84CC16',
+            'inverse_agonist': '#EA580C',
+            'inhibitor': '#7C3AED',  // Violet color for inhibitors
+            'activator': '#2563EB',  // Blue color for activators
+            'interacts_with': '#6366F1',
+            'contains': '#8B5CF6',
+            'found_in': '#EC4899',
+            'default': '#94A3B8'
+        };
+
         return colors[type] || colors.default;
     }
 
@@ -221,39 +338,119 @@ class GraphVisualization {
     }
 
     handleDragStart(event, d) {
-        if (typeof cola !== 'undefined') {
-            d.fixed = true;
-        } else {
-            if (!event.active) this.layout.alphaTarget(0.3).restart();
-            d.fx = d.x;
-            d.fy = d.y;
-        }
+        if (!event.active) this.layout.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
     }
 
     handleDrag(event, d) {
-        if (typeof cola !== 'undefined') {
-            d.x = event.x;
-            d.y = event.y;
-            this.layout.resume();
-        } else {
-            d.fx = event.x;
-            d.fy = event.y;
-        }
+        d.fx = event.x;
+        d.fy = event.y;
     }
 
     handleDragEnd(event, d) {
-        if (typeof cola !== 'undefined') {
-            d.fixed = false;
-            this.layout.resume();
-        } else {
-            if (!event.active) this.layout.alphaTarget(0);
-            d.fx = null;
-            d.fy = null;
-        }
+        if (!event.active) this.layout.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
     }
 
     on(event, callback) {
+        if (!this.initialized) {
+            console.error('Cannot add event listener - graph not initialized');
+            return;
+        }
         this.eventEmitter.on(event, callback);
+    }
+
+    focusNode(nodeId) {
+        // Find the node in the data
+        const node = this.layout.nodes().find(n => n.id === nodeId);
+        if (!node) {
+            console.error('Node not found:', nodeId);
+            return;
+        }
+
+        // Calculate the transform to center on the node
+        const scale = 2;  // Zoom in a bit
+        const x = this.width / 2 - node.x * scale;
+        const y = this.height / 2 - node.y * scale;
+
+        // Transition to the node
+        this.svg.transition()
+            .duration(750)
+            .call(this.zoom.transform, d3.zoomIdentity
+                .translate(x, y)
+                .scale(scale));
+
+        // Highlight the node
+        this.g.selectAll('circle')
+            .transition()
+            .duration(750)
+            .attr('r', d => d.id === nodeId ? 25 : d.width / 2 || 15)
+            .attr('stroke', d => d.id === nodeId ? '#FFD700' : 'none')
+            .attr('stroke-width', d => d.id === nodeId ? 3 : 0);
+
+        // Reset highlight after a delay
+        setTimeout(() => {
+            this.g.selectAll('circle')
+                .transition()
+                .duration(750)
+                .attr('r', d => d.width / 2 || 15)
+                .attr('stroke', 'none')
+                .attr('stroke-width', 0);
+        }, 2000);
+    }
+
+    updateLegend() {
+        // Find the legend container
+        const legend = d3.select('.graph-legend');
+        if (!legend.empty()) {
+            // Clear existing legend items
+            legend.html('');
+
+            // Add node type legend items
+            const nodeTypes = [
+                { label: 'Molecules', color: '#10B981' },
+                { label: 'Organisms', color: '#3B82F6' },
+                { label: 'Targets', color: '#EF4444' }
+            ];
+
+            nodeTypes.forEach(type => {
+                legend.append('div')
+                    .attr('class', 'legend-item')
+                    .html(`
+                        <span class="legend-color" style="background-color: ${type.color};"></span>
+                        <span class="legend-label">${type.label}</span>
+                    `);
+            });
+
+            // Add separator
+            legend.append('hr')
+                .attr('class', 'my-2 border-gray-200');
+
+            // Add relationship type legend items
+            const relationshipTypes = [
+                { label: 'Agonist', color: '#22C55E' },
+                { label: 'Antagonist', color: '#DC2626' },
+                { label: 'Partial Agonist', color: '#84CC16' },
+                { label: 'Inverse Agonist', color: '#EA580C' },
+                { label: 'Inhibitor', color: '#7C3AED' },
+                { label: 'Activator', color: '#2563EB' },
+                { label: 'Unknown', color: '#94A3B8' }
+            ];
+
+            relationshipTypes.forEach(type => {
+                legend.append('div')
+                    .attr('class', 'legend-item')
+                    .html(`
+                        <div class="flex items-center">
+                            <div class="w-8 h-0.5" style="background-color: ${type.color};"></div>
+                            <div class="legend-color" style="background-color: ${type.color}; transform: rotate(45deg); width: 6px; height: 6px; margin-left: -3px;"></div>
+                        </div>
+                        <span class="legend-label ml-2">${type.label}</span>
+                    `);
+            });
+        }
     }
 }
 
@@ -275,4 +472,11 @@ class EventEmitter {
             this.events[event].forEach(callback => callback(data));
         }
     }
-} 
+}
+
+// Node icons by type
+const nodeIcons = {
+    'Molecule': 'fas fa-atom',
+    'Target': 'fas fa-bullseye',
+    'Organism': 'fas fa-leaf'
+}; 

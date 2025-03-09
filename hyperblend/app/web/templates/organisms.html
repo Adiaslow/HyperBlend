@@ -1,0 +1,84 @@
+{% extends "list_base.html" %}
+
+{% block database_options %}
+<option value="">Select a database</option>
+<option value="ncbi">NCBI Taxonomy</option>
+<option value="gbif">GBIF</option>
+<option value="itis">ITIS</option>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+class OrganismPage extends ListPage {
+    constructor() {
+        super('organism');
+    }
+
+    getItemSpecificHtml(item) {
+        return `
+            <div class="mt-2 space-y-2">
+                ${item.scientific_name ? `
+                <div>
+                    <p class="text-sm text-gray-500">Scientific Name</p>
+                    <p class="italic">${item.scientific_name}</p>
+                </div>
+                ` : ''}
+                ${item.taxonomy ? `
+                <div>
+                    <p class="text-sm text-gray-500">Taxonomy</p>
+                    <p class="text-sm">${this.formatTaxonomy(item.taxonomy)}</p>
+                </div>
+                ` : ''}
+                ${item.habitat ? `
+                <div>
+                    <p class="text-sm text-gray-500">Habitat</p>
+                    <p>${item.habitat}</p>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    getPreviewHtml(data) {
+        return `
+            <div class="space-y-3">
+                <div>
+                    <h3 class="font-semibold">${data.name}</h3>
+                    ${data.description ? `<p class="text-sm text-gray-600">${data.description}</p>` : ''}
+                </div>
+                ${data.scientific_name ? `
+                <div>
+                    <p class="text-sm text-gray-500">Scientific Name</p>
+                    <p class="italic">${data.scientific_name}</p>
+                </div>
+                ` : ''}
+                ${data.taxonomy ? `
+                <div>
+                    <p class="text-sm text-gray-500">Taxonomy</p>
+                    <p class="text-sm">${this.formatTaxonomy(data.taxonomy)}</p>
+                </div>
+                ` : ''}
+                ${data.habitat ? `
+                <div>
+                    <p class="text-sm text-gray-500">Habitat</p>
+                    <p>${data.habitat}</p>
+                </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
+    formatTaxonomy(taxonomy) {
+        if (typeof taxonomy === 'string') return taxonomy;
+        if (Array.isArray(taxonomy)) return taxonomy.join(' > ');
+        return Object.values(taxonomy).join(' > ');
+    }
+}
+
+// Initialize the page
+document.addEventListener('DOMContentLoaded', () => {
+    new OrganismPage();
+});
+</script>
+{% endblock %} 

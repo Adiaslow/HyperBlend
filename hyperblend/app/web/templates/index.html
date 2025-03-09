@@ -124,23 +124,25 @@
         text-decoration: underline;
     }
 
-    /* Legend styles */
+    /* Updated Legend styles */
     .graph-legend {
         position: absolute;
-        top: 1rem;
-        right: 1rem;
-        background: rgba(255, 255, 255, 0.9);
+        bottom: 1rem;
+        left: 1rem;
+        background: rgba(255, 255, 255, 0.95);
         padding: 1rem;
         border-radius: 0.5rem;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         z-index: 10;
+        font-size: 0.875rem;
+        min-width: 200px;
     }
 
     .legend-item {
         display: flex;
         align-items: center;
         margin-bottom: 0.5rem;
-        font-size: 0.875rem;
+        padding: 0.25rem 0;
     }
 
     .legend-item:last-child {
@@ -148,28 +150,62 @@
     }
 
     .legend-color {
-        width: 1rem;
-        height: 1rem;
+        width: 12px;
+        height: 12px;
         border-radius: 50%;
-        margin-right: 0.5rem;
+        margin-right: 0.75rem;
+        display: inline-block;
     }
 
-    /* Sidebar styles */
+    .legend-label {
+        color: #4a5568;
+        flex: 1;
+    }
+
+    /* Relationship legend styles */
+    .legend-relationship {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .legend-line {
+        height: 2px;
+        width: 24px;
+        display: inline-block;
+    }
+
+    .legend-arrow {
+        width: 6px;
+        height: 6px;
+        transform: rotate(45deg);
+        margin-left: -3px;
+    }
+
+    /* Legend separator */
+    .legend-separator {
+        margin: 0.75rem 0;
+        border: 0;
+        border-top: 1px solid #e2e8f0;
+    }
+
+    /* Updated Sidebar styles */
     #sidebar {
         position: fixed;
-        top: 56px; /* Match navbar height */
+        top: 56px;
         right: 0;
-        height: calc(100vh - 112px); /* Viewport height minus header + footer */
-        width: 20rem;
+        height: calc(100vh - 112px);
+        width: 24rem;
         background: white;
         box-shadow: -4px 0 6px -1px rgba(0, 0, 0, 0.1);
         overflow-y: auto;
         z-index: 50;
-        transition: transform 0.3s ease;
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    #sidebar.hidden {
-        transform: translateX(100%);
+    #sidebar.visible {
+        transform: translateX(0);
     }
 
     /* Loading spinner */
@@ -188,17 +224,17 @@
 {% endblock %}
 
 {% block header_stats %}
-<div class="header-stats">
-    <div class="stat-item">
-        <div class="stat-number" id="compoundCount">-</div>
-        <div class="stat-label">Compounds</div>
+<div class="stats-grid grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="stat-card bg-white p-4 rounded-lg shadow">
+        <div class="stat-value text-3xl font-bold text-green-600" id="moleculeCount">-</div>
+        <div class="stat-label">Molecules</div>
     </div>
-    <div class="stat-item">
-        <div class="stat-number" id="sourceCount">-</div>
-        <div class="stat-label">Sources</div>
+    <div class="stat-card bg-white p-4 rounded-lg shadow">
+        <div class="stat-value text-3xl font-bold text-blue-600" id="organismCount">-</div>
+        <div class="stat-label">Organisms</div>
     </div>
-    <div class="stat-item">
-        <div class="stat-number" id="targetCount">-</div>
+    <div class="stat-card bg-white p-4 rounded-lg shadow">
+        <div class="stat-value text-3xl font-bold text-red-600" id="targetCount">-</div>
         <div class="stat-label">Targets</div>
     </div>
 </div>
@@ -207,29 +243,29 @@
 {% block content %}
 <!-- Graph Visualization -->
 <div id="graph-container">
-    <!-- Legend -->
+    <!-- Updated Legend -->
     <div class="graph-legend">
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #3498db;"></div>
-            <span>Compounds</span>
+            <span class="legend-color" style="background-color: #10B981;"></span>
+            <span class="legend-label">Molecules</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #2ecc71;"></div>
-            <span>Sources</span>
+            <span class="legend-color" style="background-color: #3B82F6;"></span>
+            <span class="legend-label">Organisms</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #e74c3c;"></div>
-            <span>Targets</span>
+            <span class="legend-color" style="background-color: #EF4444;"></span>
+            <span class="legend-label">Targets</span>
         </div>
         <div class="legend-item">
-            <div class="legend-color" style="background-color: #95a5a6;"></div>
-            <span>Relationships</span>
+            <span class="legend-color" style="background-color: #94A3B8;"></span>
+            <span class="legend-label">Relationships</span>
         </div>
     </div>
 </div>
 
 <!-- Sidebar for Node Details -->
-<div id="sidebar" class="hidden">
+<div id="sidebar">
     <!-- Node details will be shown here -->
 </div>
 
@@ -240,40 +276,87 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Load WebCola first -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/webcola/3.4.0/cola.min.js"></script>
-<script>
-    // Fallback to alternative CDN if the first one fails
-    if (typeof cola === 'undefined') {
-        document.write('<script src="https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js"><\/script>');
-    }
-</script>
-
-<!-- Load D3.js -->
+<!-- Load D3.js first -->
 <script src="https://d3js.org/d3.v7.min.js"></script>
 
-<!-- Load our application scripts -->
-<script src="{{ url_for('static', filename='js/api.js') }}"></script>
-<script src="{{ url_for('static', filename='js/graph.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
-
-<!-- Initialize the application after all scripts are loaded -->
+<!-- Load WebCola with fallbacks -->
 <script>
-    // Ensure DOM is fully loaded before initializing
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            if (document.getElementById('graph-container')) {
-                window.app = new App();
-            } else {
-                console.error('Graph container not found in DOM');
-            }
+    // Function to load script with promise
+    function loadScript(url) {
+        return new Promise((resolve, reject) => {
+            const script = document.createElement('script');
+            script.src = url;
+            script.onload = () => resolve();
+            script.onerror = () => reject();
+            document.head.appendChild(script);
         });
-    } else {
-        if (document.getElementById('graph-container')) {
-            window.app = new App();
-        } else {
-            console.error('Graph container not found in DOM');
+    }
+
+    // Try loading WebCola from different CDNs
+    async function initializeWebCola() {
+        const cdnUrls = [
+            'https://cdnjs.cloudflare.com/ajax/libs/webcola/3.4.0/cola.min.js',
+            'https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js',
+            'https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js'
+        ];
+
+        for (const url of cdnUrls) {
+            try {
+                await loadScript(url);
+                if (typeof cola !== 'undefined') {
+                    console.log('WebCola loaded successfully');
+                    return true;
+                }
+            } catch (error) {
+                console.warn(`Failed to load WebCola from ${url}`);
+            }
         }
+        
+        console.error('Failed to load WebCola from all CDNs');
+        alert('Failed to load graph visualization library. Some features may not work correctly.');
+        return false;
+    }
+
+    // Initialize all required scripts in sequence
+    async function initializeApplication() {
+        try {
+            // First load WebCola
+            await initializeWebCola();
+
+            // Then load our application scripts in sequence
+            await loadScript("{{ url_for('static', filename='js/api.js') }}");
+            console.log('API client script loaded');
+
+            // Wait for API client to initialize
+            await new Promise(resolve => {
+                function checkAPI() {
+                    if (window.api && window.api.getGraphData) {
+                        console.log('API client fully initialized');
+                        resolve();
+                    } else {
+                        setTimeout(checkAPI, 100);
+                    }
+                }
+                checkAPI();
+            });
+
+            await loadScript("{{ url_for('static', filename='js/graph.js') }}");
+            console.log('Graph visualization script loaded');
+
+            await loadScript("{{ url_for('static', filename='js/app.js') }}");
+            console.log('Application script loaded');
+
+        } catch (error) {
+            console.error('Error initializing application:', error);
+            alert('Failed to initialize application. Please refresh the page and try again.');
+        }
+    }
+
+    // Start initialization when DOM is loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initializeApplication);
+    } else {
+        initializeApplication();
     }
 </script>
 {% endblock %} 
