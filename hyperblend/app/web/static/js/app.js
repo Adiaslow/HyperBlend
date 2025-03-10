@@ -7,8 +7,9 @@ class App {
         this.initializationAttempts = 0;
         this.maxAttempts = 10;
         this.currentNodeId = null;
+        this.initializationInterval = 100; // ms between retries
 
-        // Wait for DOM to be fully loaded
+        // Initialize when DOM is ready
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', () => this.initialize());
         } else {
@@ -17,103 +18,132 @@ class App {
     }
 
     initialize() {
-        // Ensure API client is available and has required methods
-        if (!window.api || !window.api.getGraphData) {
-            this.initializationAttempts++;
-            if (this.initializationAttempts < this.maxAttempts) {
-                console.log('API client not ready, retrying...');
-                setTimeout(() => this.initialize(), 200);
-                return;
-            } else {
-                throw new Error('API client initialization failed after multiple attempts');
-            }
+        // First ensure the API client exists
+        if (!window.api) {
+            return this.retryInitialization('API client not available');
         }
+
+        // Then check if it has the required methods
+        if (!this.validateAPIClient()) {
+            return this.retryInitialization('API client missing required methods');
+        }
+
+        // Check for graph container only if we're on the home page
+        if (window.location.pathname === '/' && !document.getElementById('graph-container')) {
+            return this.retryInitialization('Graph container not found');
+        }
+
+        try {
+            if (!this.initialized) {
+                console.log('Initializing application components...');
+                
+                // Store API reference
+                this.api = window.api;
+
+                // Initialize UI elements
+                this.initializeUIElements();
+
+                // Initialize components based on current page
+                if (window.location.pathname === '/') {
+                    this.initializeHomePage();
+                } else {
+                    this.initializeSubPage();
+                }
+
+                // Set up event listeners
+                this.initializeEventListeners();
+
+                this.initialized = true;
+                console.log('Application initialized successfully');
+            }
+        } catch (error) {
+            console.error('Error during initialization:', error);
+            this.handleInitializationError(error);
+        }
+    }
+
+    validateAPIClient() {
+        const requiredMethods = ['getGraphData', 'getStatistics', 'listMolecules', 'listTargets', 'listOrganisms', 'listEffects'];
+        return requiredMethods.every(method => typeof window.api[method] === 'function');
+    }
+
+    retryInitialization(reason) {
+        this.initializationAttempts++;
+        if (this.initializationAttempts < this.maxAttempts) {
+            console.log(`${reason}, retrying... (Attempt ${this.initializationAttempts}/${this.maxAttempts})`);
+            setTimeout(() => this.initialize(), this.initializationInterval);
+        } else {
+            this.handleInitializationError(new Error(`Initialization failed after ${this.maxAttempts} attempts: ${reason}`));
+        }
+    }
+
+    handleInitializationError(error) {
+        console.error('Fatal initialization error:', error);
+        // Show user-friendly error message
+        this.showError('Unable to initialize application. Please refresh the page or contact support if the problem persists.');
+    }
+
+    initializeUIElements() {
+        this.searchInput = document.getElementById('searchInput');
+        this.loadingSpinner = document.getElementById('loadingSpinner');
+        this.sidebar = document.getElementById('sidebar');
         
-        // Ensure graph container exists if on home page
-        const container = document.getElementById('graph-container');
-        if (!container && window.location.pathname === '/') {
-            console.error('Graph container not found. Waiting for it to be available...');
-            setTimeout(() => this.initialize(), 200);
-            return;
+        // Hide loading spinner initially
+        if (this.loadingSpinner) {
+            this.hideLoading();
         }
-        
-        if (!this.initialized) {
-            // Only initialize graph visualization on the home page
-            if (window.location.pathname === '/') {
-                this.graph = new GraphVisualization('graph-container');
-            }
-            
-            this.api = window.api;
-            this.searchInput = document.getElementById('searchInput');
-            this.loadingSpinner = document.getElementById('loadingSpinner');
-            this.sidebar = document.getElementById('sidebar');
-            
-            // Initialize event listeners only if elements exist
-            this.initializeEventListeners();
-            
-            // Load initial data
-            if (window.location.pathname === '/') {
-                this.loadData();
-            } else {
-                // Update statistics on other pages
-                this.updateStatistics();
-            }
-            
-            this.initialized = true;
-            console.log('Application initialized successfully');
-        }
+    }
+
+    initializeHomePage() {
+        console.log('Initializing home page...');
+        this.graph = new GraphVisualization('graph-container');
+        this.loadData();
+    }
+
+    initializeSubPage() {
+        console.log('Initializing sub page...');
+        this.updateStatistics();
     }
 
     initializeEventListeners() {
         // Search input handler with debounce
         if (this.searchInput) {
-            let searchTimeout;
-            this.searchInput.addEventListener('input', (event) => {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this.handleSearch(event.target.value);
-                }, 300);
-            });
+            this.searchInput.addEventListener('input', debounce((event) => {
+                this.handleSearch(event.target.value);
+            }, 300));
         }
 
-        // Handle node clicks for showing details
+        // Graph event listeners
         if (this.graph) {
-            this.graph.on('nodeClick', (node) => {
-                this.showNodeDetails(node);
-            });
-        }
-
-        // Handle click-away from sidebar
-        if (this.sidebar) {
+            this.graph.on('nodeClick', (node) => this.showNodeDetails(node));
+            
+            // Handle click-away from sidebar
             document.addEventListener('click', (event) => {
-                // Check if click is on the graph container and not on a node
                 if (event.target.closest('#graph-container') && 
                     !event.target.closest('circle') && 
                     !event.target.closest('.graph-legend')) {
                     this.hideSidebar();
                 }
             });
-        }
 
-        // Handle window resize
-        if (this.graph) {
-            window.addEventListener('resize', () => {
-                this.graph.resize();
-            });
+            // Handle window resize
+            window.addEventListener('resize', () => this.graph.resize());
         }
     }
 
     async loadData(query = '') {
         try {
             this.showLoading();
-            const data = await this.api.getGraphData(query);  // Use getGraphData instead of searchGraph
-            this.graph.updateData(data);
+            const data = await this.api.getGraphData(query);
+            if (this.graph) {
+                this.graph.updateData(data);
+            }
             await this.updateStatistics();
-            this.hideLoading();
         } catch (error) {
             console.error('Error loading data:', error);
+            this.showError('Error loading graph data. Please try again.');
+        } finally {
             this.hideLoading();
-            this.showError('Error loading graph data');
         }
     }
 
@@ -121,33 +151,31 @@ class App {
         try {
             this.showLoading();
             const [graphData, targets] = await Promise.all([
-                this.api.getGraphData(query),  // Use getGraphData instead of searchGraph
-                this.api.searchTargets(query)
+                this.api.getGraphData(query),
+                this.api.listTargets(query)
             ]);
 
-            // Update the graph with the combined data
-            const combinedData = this.combineGraphData(graphData, targets);
-            this.graph.updateData(combinedData);
+            if (this.graph) {
+                const combinedData = this.combineGraphData(graphData, targets);
+                this.graph.updateData(combinedData);
+            }
             
             await this.updateStatistics();
-            this.hideLoading();
         } catch (error) {
             console.error('Error during search:', error);
+            this.showError('Error searching data. Please try again.');
+        } finally {
             this.hideLoading();
-            this.showError('Error searching data');
         }
     }
 
     combineGraphData(graphData, targets) {
-        // If there are no targets or the graph data is empty, return the original data
         if (!targets.length || !graphData.nodes) {
             return graphData;
         }
 
-        // Create a map of existing node IDs to avoid duplicates
         const existingNodeIds = new Set(graphData.nodes.map(n => n.id));
         
-        // Add new target nodes if they don't exist
         targets.forEach(target => {
             if (!existingNodeIds.has(target.id)) {
                 graphData.nodes.push({
@@ -167,45 +195,99 @@ class App {
         return graphData;
     }
 
-    async showNodeDetails(node) {
+    async updateStatistics() {
         try {
-            // If clicking the same node, just toggle the sidebar
-            if (this.currentNodeId === node.id) {
-                this.toggleSidebar();
-                return;
-            }
+            const stats = await this.api.getStatistics();
+            
+            const elements = {
+                molecules: document.getElementById('moleculeCount'),
+                organisms: document.getElementById('organismCount'),
+                targets: document.getElementById('targetCount'),
+                effects: document.getElementById('effectCount')
+            };
 
-            // If clicking a different node, show its details
-            this.currentNodeId = node.id;
-            console.log('Fetching details for node:', node);
-            const details = await this.api.getNodeDetails(node.id);
-            console.log('Received node details:', details);
-
-            let content = `
-                <div class="p-4">
-                    <h2 class="text-xl font-bold mb-4">${details.name}</h2>
-                    <div class="mb-4">
-                        <span class="inline-block px-2 py-1 rounded bg-${this.getNodeTypeColor(details.type)} text-white text-sm">
-                            ${details.type}
-                        </span>
-                    </div>
-                    ${details.description ? `<p class="mb-4">${details.description}</p>` : ''}
-                    
-                    ${this.getNodeProperties(details)}
-                    
-                    <h3 class="text-lg font-semibold mb-2">Related Nodes (${details.related_nodes.length})</h3>
-                    <div class="space-y-2">
-                        ${this.getRelatedNodesHtml(details.related_nodes)}
-                    </div>
-                </div>
-            `;
-
-            this.sidebar.innerHTML = content;
-            this.showSidebar();
+            Object.entries(elements).forEach(([key, element]) => {
+                if (element && stats[key]) {
+                    element.textContent = stats[key];
+                }
+            });
         } catch (error) {
-            console.error('Error showing node details:', error);
+            console.error('Error updating statistics:', error);
+        }
+    }
+
+    showLoading() {
+        if (this.loadingSpinner) {
+            this.loadingSpinner.classList.remove('hidden');
+        }
+    }
+
+    hideLoading() {
+        if (this.loadingSpinner) {
+            this.loadingSpinner.classList.add('hidden');
+        }
+    }
+
+    showError(message) {
+        const errorContainer = document.getElementById('errorContainer') || this.createErrorContainer();
+        errorContainer.textContent = message;
+        errorContainer.classList.remove('hidden');
+        
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            errorContainer.classList.add('hidden');
+        }, 5000);
+    }
+
+    createErrorContainer() {
+        const container = document.createElement('div');
+        container.id = 'errorContainer';
+        container.className = 'error-message fixed top-4 right-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden';
+        document.body.appendChild(container);
+        return container;
+    }
+
+    showSidebar() {
+        if (this.sidebar) {
+            this.sidebar.classList.remove('hidden');
+        }
+    }
+
+    hideSidebar() {
+        if (this.sidebar) {
+            this.sidebar.classList.add('hidden');
+        }
+    }
+
+    toggleSidebar() {
+        if (this.sidebar) {
+            this.sidebar.classList.toggle('visible');
+        }
+    }
+
+    async showNodeDetails(node) {
+        if (!node || !node.id) return;
+        
+        try {
+            const details = await this.api.getNodeDetails(node.id);
+            if (this.sidebar) {
+                this.sidebar.innerHTML = this.getNodeDetailsHtml(details);
+                this.showSidebar();
+            }
+        } catch (error) {
+            console.error('Error fetching node details:', error);
             this.showError('Error loading node details');
         }
+    }
+
+    getNodeDetailsHtml(details) {
+        return `
+            <div class="p-4">
+                <h2 class="text-xl font-bold mb-4">${details.name}</h2>
+                ${details.description ? `<p class="text-gray-600 mb-4">${details.description}</p>` : ''}
+                ${this.getRelatedNodesHtml(details.related_nodes || [])}
+            </div>
+        `;
     }
 
     getNodeTypeColor(type) {
@@ -323,85 +405,44 @@ class App {
             </div>
         `).join('');
     }
-
-    async updateStatistics() {
-        try {
-            const response = await fetch('/api/statistics');
-            const data = await response.json();
-
-            const moleculeCountElement = document.getElementById('moleculeCount');
-            const organismCountElement = document.getElementById('organismCount');
-            const targetCountElement = document.getElementById('targetCount');
-            const effectCountElement = document.getElementById('effectCount');
-
-            if (moleculeCountElement) {
-                moleculeCountElement.textContent = data.molecules;
-            }
-            if (organismCountElement) {
-                organismCountElement.textContent = data.organisms;
-            }
-            if (targetCountElement) {
-                targetCountElement.textContent = data.targets;
-            }
-            if (effectCountElement) {
-                effectCountElement.textContent = data.effects;
-            }
-        } catch (error) {
-            console.error('Error updating statistics:', error);
-        }
-    }
-
-    showLoading() {
-        this.loadingSpinner.classList.remove('hidden');
-    }
-
-    hideLoading() {
-        this.loadingSpinner.classList.add('hidden');
-    }
-
-    showError(message) {
-        // You can implement a more sophisticated error display here
-        alert(message);
-    }
-
-    showSidebar() {
-        this.sidebar.classList.add('visible');
-    }
-
-    hideSidebar() {
-        this.sidebar.classList.remove('visible');
-        this.currentNodeId = null;
-    }
-
-    toggleSidebar() {
-        if (this.sidebar.classList.contains('visible')) {
-            this.hideSidebar();
-        } else {
-            this.showSidebar();
-        }
-    }
 }
+
+// Make App class available globally
+window.App = App;
 
 // Initialize the application
 console.log('Setting up application initialization...');
 
-// Function to create app instance
-function createApp() {
+// Create app instance with proper error handling
+async function createApp() {
     console.log('Creating app instance...');
     try {
+        if (!window.api) {
+            throw new Error('API client not found');
+        }
+
+        // Wait for API client to be initialized
+        await window.api.waitForInitialization();
+        
         window.app = new App();
     } catch (error) {
         console.error('Error creating app:', error);
-        // Try again if API client isn't ready
-        if (error.message === 'API client not initialized') {
+        // If API client exists but isn't ready, retry
+        if (window.api && !window.api.initialized) {
             setTimeout(createApp, 100);
+        } else {
+            // Show error to user
+            const errorContainer = document.createElement('div');
+            errorContainer.className = 'error-message fixed top-4 right-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg';
+            errorContainer.textContent = 'Unable to initialize application. Please refresh the page or contact support if the problem persists.';
+            document.body.appendChild(errorContainer);
         }
     }
 }
 
-// Start initialization when DOM is loaded
+// Ensure proper initialization sequence
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', createApp);
 } else {
     createApp();
-} 
+}; 

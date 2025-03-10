@@ -1,13 +1,11 @@
 {% extends "list_base.html" %}
 
 {% block database_options %}
-<option value="">Select a database</option>
 <option value="chembl">ChEMBL</option>
 <option value="drugbank">DrugBank</option>
 {% endblock %}
 
-{% block scripts %}
-{{ super() }}
+{% block page_scripts %}
 <script>
 class EffectPage extends ListPage {
     constructor() {
@@ -16,14 +14,10 @@ class EffectPage extends ListPage {
 
     getItemSpecificHtml(item) {
         return `
-            <div class="mt-2 grid grid-cols-2 gap-4">
-                <div>
-                    <p class="text-sm text-gray-500">Description</p>
-                    <p>${item.description || 'N/A'}</p>
-                </div>
-                <div>
-                    <p class="text-sm text-gray-500">Associated Molecules</p>
-                    <p>${item.molecule_count} molecule${item.molecule_count !== 1 ? 's' : ''}</p>
+            <div class="mt-2 text-sm">
+                <div class="text-gray-600">${item.description || 'No description available'}</div>
+                <div class="mt-1">
+                    <span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}
                 </div>
             </div>
         `;
@@ -31,29 +25,75 @@ class EffectPage extends ListPage {
 
     getPreviewHtml(data) {
         return `
-            <div class="space-y-3">
-                <div>
-                    <h3 class="font-semibold">${data.name}</h3>
-                    ${data.description ? `<p class="text-sm text-gray-600">${data.description}</p>` : ''}
+            <div class="p-4 border rounded-lg bg-white">
+                <h3 class="text-lg font-semibold">${data.name}</h3>
+                ${data.description ? `<p class="text-gray-600 mt-2">${data.description}</p>` : ''}
+                <div class="mt-4 text-sm">
+                    <div><span class="text-gray-500">Type:</span> ${data.type || 'Unknown'}</div>
+                    ${data.source ? `<div class="mt-1"><span class="text-gray-500">Source:</span> ${data.source}</div>` : ''}
                 </div>
-                <div class="grid grid-cols-2 gap-4">
+            </div>
+        `;
+    }
+
+    getItemInfoHtml(item) {
+        return `
+            <div class="p-4">
+                <h2 class="text-2xl font-bold mb-4">${item.name}</h2>
+                ${item.description ? `<p class="text-gray-600 mb-6">${item.description}</p>` : ''}
+                
+                <div class="grid grid-cols-2 gap-6 mb-6">
                     <div>
-                        <p class="text-sm text-gray-500">Description</p>
-                        <p>${data.description || 'N/A'}</p>
+                        <h3 class="text-lg font-semibold mb-2">Details</h3>
+                        <div class="space-y-2">
+                            <div><span class="text-gray-500">Type:</span> ${item.type || 'Unknown'}</div>
+                            <div><span class="text-gray-500">Source:</span> ${item.source || 'N/A'}</div>
+                            <div><span class="text-gray-500">External ID:</span> ${item.external_id || 'N/A'}</div>
+                        </div>
                     </div>
                     <div>
-                        <p class="text-sm text-gray-500">Associated Molecules</p>
-                        <p>${data.molecule_count || 0} molecule${(data.molecule_count || 0) !== 1 ? 's' : ''}</p>
+                        <h3 class="text-lg font-semibold mb-2">Statistics</h3>
+                        <div class="space-y-2">
+                            <div><span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}</div>
+                            <div><span class="text-gray-500">Targets:</span> ${item.target_count || 0}</div>
+                        </div>
                     </div>
                 </div>
+
+                ${item.molecules && item.molecules.length > 0 ? `
+                    <div class="mb-6">
+                        <h3 class="text-lg font-semibold mb-2">Associated Molecules</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            ${item.molecules.map(mol => `
+                                <div class="p-3 border rounded-lg">
+                                    <div class="font-medium">${mol.name}</div>
+                                    <div class="text-sm text-gray-500">${mol.type || 'Unknown type'}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+
+                ${item.targets && item.targets.length > 0 ? `
+                    <div>
+                        <h3 class="text-lg font-semibold mb-2">Associated Targets</h3>
+                        <div class="grid grid-cols-2 gap-4">
+                            ${item.targets.map(target => `
+                                <div class="p-3 border rounded-lg">
+                                    <div class="font-medium">${target.name}</div>
+                                    <div class="text-sm text-gray-500">${target.type || 'Unknown type'}</div>
+                                    ${target.organism ? `<div class="text-sm text-gray-500 italic">${target.organism}</div>` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
     }
 }
 
 // Initialize the page
-document.addEventListener('DOMContentLoaded', () => {
-    new EffectPage();
-});
+window.effectPage = new EffectPage();
 </script>
 {% endblock %} 

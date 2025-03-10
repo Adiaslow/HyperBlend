@@ -3,13 +3,14 @@
 import logging
 from typing import List, Optional, Dict, Any
 from py2neo import Graph, NodeMatcher
-from .base_service import BaseInternalService
+from .base_service import BaseService
 from ..external.uniprot_service import UniProtService
+from hyperblend.app.web.core.exceptions import ResourceNotFoundError
 
 logger = logging.getLogger(__name__)
 
 
-class TargetService(BaseInternalService):
+class TargetService(BaseService):
     """Service for querying targets from the database."""
 
     def __init__(self, graph: Graph):
@@ -28,26 +29,21 @@ class TargetService(BaseInternalService):
         Returns:
             List of target dictionaries
         """
-        query = """
-        MATCH (t:Target)
-        OPTIONAL MATCH (t)-[:HAS_MOLECULE]-(m:Molecule)
-        WITH t, count(m) as compound_count
-        RETURN {
-            id: toString(elementId(t)),
-            name: t.name,
-            type: t.type,
-            organism: t.organism,
-            description: t.description,
-            compound_count: compound_count
-        } as target
-        ORDER BY target.name
-        """
         try:
-            result = self.graph.run(query)
-            return [dict(record["target"]) for record in result]
+            cypher_query = """
+            MATCH (t:Target)
+            RETURN {
+                id: toString(elementId(t)),
+                name: t.name,
+                description: t.description,
+                type: t.type,
+                organism: t.organism
+            } as target
+            """
+            result = self.run_query(cypher_query)
+            return [r["target"] for r in result]
         except Exception as e:
-            logger.error(f"Error getting all targets: {str(e)}")
-            return []
+            self._handle_db_error(e, "getting all targets")
 
     def search_targets(self, query: str) -> List[Dict[str, Any]]:
         """Search for targets by name, description, or UniProt ID.
@@ -58,73 +54,63 @@ class TargetService(BaseInternalService):
         Returns:
             List of matching target dictionaries
         """
-        # First try to find existing targets
-        search_pattern = f"(?i).*{query}.*"
-        cypher_query = """
-        MATCH (t:Target)
-        WHERE t.name =~ $pattern 
-           OR t.description =~ $pattern
-           OR t.uniprot_id =~ $pattern
-           OR t.uniprot_id = $exact_query
-        OPTIONAL MATCH (t)-[:HAS_MOLECULE]-(m:Molecule)
-        WITH t, count(m) as compound_count
-        RETURN {
-            id: toString(elementId(t)),
-            name: t.name,
-            type: t.type,
-            organism: t.organism,
-            description: t.description,
-            uniprot_id: t.uniprot_id,
-            compound_count: compound_count
-        } as target
-        ORDER BY target.name
-        """
         try:
-            result = self.graph.run(
-                cypher_query, pattern=search_pattern, exact_query=query
-            )
-            targets = [dict(record["target"]) for record in result]
-
-            # If no results and query looks like a UniProt ID, try to fetch from UniProt
-            if not targets and query.startswith("P") and query[1:].isdigit():
-                target = self.fetch_and_store_uniprot_target(query)
-                if target:
-                    targets = [target]
-
-            return targets
+            cypher_query = """
+            MATCH (t:Target)
+            WHERE t.name =~ $query 
+               OR t.description =~ $query 
+               OR t.type =~ $query
+            RETURN {
+                id: toString(elementId(t)),
+                name: t.name,
+                description: t.description,
+                type: t.type,
+                organism: t.organism
+            } as target
+            """
+            result = self.run_query(cypher_query, {"query": f"(?i).*{query}.*"})
+            return [r["target"] for r in result]
         except Exception as e:
-            logger.error(f"Error searching targets: {str(e)}")
-            return []
+            self._handle_db_error(e, f"searching targets with query {query}")
 
     def get_target(self, target_id: str) -> Optional[Dict[str, Any]]:
-        """Get a specific target by ID.
+        """
+        Get a specific target by ID.
 
         Args:
-            target_id: Target ID
+            target_id: The ID of the target to retrieve
 
         Returns:
-            Target dictionary or None if not found
-        """
-        query = """
-        MATCH (t:Target)
-        WHERE toString(elementId(t)) = $target_id
-        RETURN {
-            id: toString(elementId(t)),
-            name: t.name,
-            type: t.type,
-            organism: t.organism,
-            description: t.description,
-            sequence: t.sequence,
-            uniprot_id: t.uniprot_id,
-            chembl_id: t.chembl_id
-        } as target
+            Dictionary containing target details and related molecules
         """
         try:
-            result = self.graph.run(query, target_id=target_id).data()
+            cypher_query = """
+            MATCH (t:Target)
+            WHERE elementId(t) = $target_id
+            OPTIONAL MATCH (t)<-[r]-(m:Molecule)
+            WITH t, collect({
+                id: toString(elementId(m)),
+                name: m.name,
+                smiles: m.smiles,
+                relationship: type(r),
+                activity_type: r.activity_type,
+                activity_value: r.activity_value,
+                activity_unit: r.activity_unit,
+                confidence_score: r.confidence_score
+            }) as molecules
+            RETURN {
+                id: toString(elementId(t)),
+                name: t.name,
+                description: t.description,
+                type: t.type,
+                organism: t.organism,
+                molecules: molecules
+            } as target
+            """
+            result = self.run_query(cypher_query, {"target_id": self._validate_id(target_id)})
             return result[0]["target"] if result else None
         except Exception as e:
-            logger.error(f"Error getting target {target_id}: {str(e)}")
-            return None
+            self._handle_db_error(e, f"getting target {target_id}")
 
     def get_target_molecules(self, target_id: str) -> List[Dict[str, Any]]:
         """Get molecules associated with a target.
@@ -146,10 +132,10 @@ class TargetService(BaseInternalService):
         } as molecule
         """
         try:
-            result = self.graph.run(query, target_id=target_id)
-            return [dict(record["molecule"]) for record in result]
+            result = self.run_query(query, {"target_id": self._validate_id(target_id)})
+            return [r["molecule"] for r in result]
         except Exception as e:
-            logger.error(f"Error getting target molecules for {target_id}: {str(e)}")
+            self._handle_db_error(e, f"getting target molecules for {target_id}")
             return []
 
     def update_target(self, target_id: str, target_data: Dict[str, Any]) -> bool:
@@ -169,10 +155,10 @@ class TargetService(BaseInternalService):
         RETURN t
         """
         try:
-            result = self.graph.run(query, target_id=target_id, target_data=target_data)
+            result = self.run_query(query, {"target_id": self._validate_id(target_id), "target_data": target_data})
             return bool(result)
         except Exception as e:
-            logger.error(f"Error updating target {target_id}: {str(e)}")
+            self._handle_db_error(e, f"updating target {target_id}")
             return False
 
     def find_by_name(self, name: str, exact: bool = False) -> List[Dict[str, Any]]:
@@ -210,12 +196,10 @@ class TargetService(BaseInternalService):
 
         try:
             pattern = f"(?i).*{name}.*"  # Case-insensitive pattern
-            results = self.graph.run(
-                query, parameters={"name": name, "pattern": pattern}
-            ).data()
+            results = self.run_query(query, {"name": name, "pattern": pattern})
             return [self._format_target_result(result) for result in results]
         except Exception as e:
-            self.logger.error(f"Error finding targets by name: {str(e)}")
+            self._handle_db_error(e, f"finding targets by name {name}")
             return []
 
     def find_by_type(self, target_type: str) -> List[Dict[str, Any]]:
@@ -239,10 +223,10 @@ class TargetService(BaseInternalService):
         """
 
         try:
-            results = self.graph.run(query, parameters={"type": target_type}).data()
+            results = self.run_query(query, {"type": target_type})
             return [self._format_target_result(result) for result in results]
         except Exception as e:
-            self.logger.error(f"Error finding targets by type: {str(e)}")
+            self._handle_db_error(e, f"finding targets by type {target_type}")
             return []
 
     def find_by_source(self, source: str) -> List[Dict[str, Any]]:
@@ -266,10 +250,10 @@ class TargetService(BaseInternalService):
         """
 
         try:
-            results = self.graph.run(query, parameters={"source": source}).data()
+            results = self.run_query(query, {"source": source})
             return [self._format_target_result(result) for result in results]
         except Exception as e:
-            self.logger.error(f"Error finding targets by source: {str(e)}")
+            self._handle_db_error(e, f"finding targets by source {source}")
             return []
 
     def get_target_molecules(
@@ -311,13 +295,13 @@ class TargetService(BaseInternalService):
             params = {"name": name}
 
         try:
-            results = self.graph.run(query, parameters=params).data()
+            results = self.run_query(query, params)
             return [
                 self._format_molecule_result(result, include_activity=True)
                 for result in results
             ]
         except Exception as e:
-            self.logger.error(f"Error getting target molecules: {str(e)}")
+            self._handle_db_error(e, f"getting target molecules for {name}")
             return []
 
     def link_molecule_to_target(
@@ -356,30 +340,25 @@ class TargetService(BaseInternalService):
         """
 
         try:
-            result = self.graph.run(
+            result = self.run_query(
                 query,
-                parameters={
+                {
                     "target_name": target_name,
-                    "molecule_id": molecule_id,
+                    "molecule_id": self._validate_id(molecule_id),
                     "activity_type": activity_type,
                     "activity_value": activity_value,
                     "activity_unit": activity_unit,
                     "source": source,
                 },
-            ).data()
+            )
             success = len(result) > 0
             if success:
-                self.logger.info(
-                    f"Linked molecule {molecule_id} to target {target_name} "
-                    f"with {activity_type} = {activity_value} {activity_unit}"
-                )
+                self._handle_db_success(f"Linked molecule {molecule_id} to target {target_name} with {activity_type} = {activity_value} {activity_unit}")
             else:
-                self.logger.warning(
-                    f"Failed to link molecule {molecule_id} to target {target_name}"
-                )
+                self._handle_db_warning(f"Failed to link molecule {molecule_id} to target {target_name}")
             return success
         except Exception as e:
-            self.logger.error(f"Error linking molecule to target: {str(e)}")
+            self._handle_db_error(e, f"linking molecule {molecule_id} to target {target_name}")
             return False
 
     def _ensure_target_exists(
@@ -418,17 +397,17 @@ class TargetService(BaseInternalService):
         """
 
         try:
-            result = self.graph.run(
+            result = self.run_query(
                 query,
-                parameters={
+                {
                     "name": name,
                     "properties": target_props,
                     "source": source,
                 },
-            ).data()
+            )
             return len(result) > 0
         except Exception as e:
-            self.logger.error(f"Error ensuring target exists: {str(e)}")
+            self._handle_db_error(e, f"ensuring target {name} exists")
             return False
 
     def _format_target_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
@@ -517,7 +496,7 @@ class TargetService(BaseInternalService):
             # Get protein details from UniProt
             protein = self.uniprot_service.get_protein(uniprot_id)
             if not protein:
-                logger.error(f"No protein found for UniProt ID: {uniprot_id}")
+                self._handle_db_warning(f"No protein found for UniProt ID: {uniprot_id}")
                 return None
 
             # Get protein sequence
@@ -559,9 +538,9 @@ class TargetService(BaseInternalService):
                 pdb_ids: t.pdb_ids
             } as target
             """
-            result = self.graph.run(
+            result = self.run_query(
                 query, uniprot_id=uniprot_id, properties=target_data
-            ).data()
+            )
 
             if result:
                 target = result[0]["target"]
@@ -589,9 +568,7 @@ class TargetService(BaseInternalService):
             return None
 
         except Exception as e:
-            logger.error(
-                f"Error fetching and storing UniProt target {uniprot_id}: {str(e)}"
-            )
+            self._handle_db_error(e, f"fetching and storing UniProt target {uniprot_id}")
             return None
 
     def create_target(self, target_data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
@@ -607,7 +584,7 @@ class TargetService(BaseInternalService):
             # Validate required fields
             required_fields = ["uniprot_id", "protein_name", "organism"]
             if not all(field in target_data for field in required_fields):
-                logger.error(f"Missing required fields: {required_fields}")
+                self._handle_db_error(ValueError(f"Missing required fields: {required_fields}"), "creating target")
                 return None
 
             # Create target node with properties
@@ -629,16 +606,16 @@ class TargetService(BaseInternalService):
             RETURN t
             """
 
-            result = self.graph.run(
+            result = self.run_query(
                 query,
                 uniprot_id=target_data["uniprot_id"],
                 protein_name=target_data["protein_name"],
                 organism=target_data["organism"],
                 function=target_data.get("function", ""),
-            ).data()
+            )
 
             if not result:
-                logger.error("Failed to create target")
+                self._handle_db_error(ValueError("Failed to create target"), "creating target")
                 return None
 
             # Create relationships for additional data
@@ -669,7 +646,7 @@ class TargetService(BaseInternalService):
             }
 
         except Exception as e:
-            logger.error(f"Error creating target: {str(e)}")
+            self._handle_db_error(e, "creating target")
             return None
 
     def _create_ec_number_relationships(
@@ -687,7 +664,7 @@ class TargetService(BaseInternalService):
         MERGE (e:ECNumber {number: ec})
         MERGE (t)-[:HAS_EC_NUMBER]->(e)
         """
-        self.graph.run(query, uniprot_id=uniprot_id, ec_numbers=ec_numbers)
+        self.run_query(query, uniprot_id=uniprot_id, ec_numbers=ec_numbers)
 
     def _create_pathway_relationships(
         self, uniprot_id: str, pathways: List[str]
@@ -704,7 +681,7 @@ class TargetService(BaseInternalService):
         MERGE (p:Pathway {name: pathway})
         MERGE (t)-[:INVOLVED_IN]->(p)
         """
-        self.graph.run(query, uniprot_id=uniprot_id, pathways=pathways)
+        self.run_query(query, uniprot_id=uniprot_id, pathways=pathways)
 
     def _create_disease_relationships(
         self, uniprot_id: str, diseases: List[str]
@@ -721,7 +698,7 @@ class TargetService(BaseInternalService):
         MERGE (d:Disease {name: disease})
         MERGE (t)-[:ASSOCIATED_WITH]->(d)
         """
-        self.graph.run(query, uniprot_id=uniprot_id, diseases=diseases)
+        self.run_query(query, uniprot_id=uniprot_id, diseases=diseases)
 
     def check_drugbank_associations(self, uniprot_id: str) -> List[str]:
         """
@@ -741,7 +718,7 @@ class TargetService(BaseInternalService):
             RETURN m.drugbank_id as drugbank_id
             """
 
-            result = self.graph.run(query).data()
+            result = self.run_query(query)
             drugbank_ids = [r["drugbank_id"] for r in result if r["drugbank_id"]]
 
             if not drugbank_ids:
@@ -765,7 +742,7 @@ class TargetService(BaseInternalService):
             return matching_drugbank_ids
 
         except Exception as e:
-            self.logger.error(f"Error checking DrugBank associations: {str(e)}")
+            self._handle_db_error(e, "checking DrugBank associations")
             return []
 
     def create_target_associations(
@@ -795,11 +772,88 @@ class TargetService(BaseInternalService):
             RETURN count(r) as rel_count
             """
 
-            result = self.graph.run(
+            result = self.run_query(
                 query, target_id=target_id, drugbank_ids=drugbank_ids
-            ).data()
+            )
             return len(result) > 0 and result[0]["rel_count"] > 0
 
         except Exception as e:
-            self.logger.error(f"Error creating target associations: {str(e)}")
+            self._handle_db_error(e, "creating target associations")
             return False
+
+    def enrich_target(self, target_id: str, database: str, identifier: str) -> Dict[str, Any]:
+        """
+        Enrich a target with data from external databases.
+
+        Args:
+            target_id: The ID of the target to enrich
+            database: The external database to use (e.g., "chembl")
+            identifier: The identifier in the external database
+
+        Returns:
+            Dictionary containing enrichment results
+        """
+        try:
+            # First, verify the target exists
+            target = self.get_target(target_id)
+            if not target:
+                raise ResourceNotFoundError(f"Target {target_id} not found")
+
+            # Update target with external data
+            cypher_query = """
+            MATCH (t:Target)
+            WHERE elementId(t) = $target_id
+            SET t += $properties
+            WITH t
+            OPTIONAL MATCH (t)<-[r]-(m:Molecule)
+            WITH t, collect({
+                id: toString(elementId(m)),
+                name: m.name,
+                smiles: m.smiles,
+                relationship: type(r)
+            }) as molecules
+            RETURN {
+                id: toString(elementId(t)),
+                name: t.name,
+                description: t.description,
+                type: t.type,
+                organism: t.organism,
+                molecules: molecules,
+                enriched_from: $database
+            } as target
+            """
+            
+            # Get properties based on database type
+            if database == "chembl":
+                properties = self._get_chembl_properties(identifier)
+            else:
+                raise ValueError(f"Unsupported database: {database}")
+
+            result = self.run_query(
+                cypher_query,
+                {
+                    "target_id": self._validate_id(target_id),
+                    "properties": properties,
+                    "database": database
+                }
+            )
+            return result[0]["target"] if result else None
+        except Exception as e:
+            self._handle_db_error(e, f"enriching target {target_id}")
+
+    def _get_chembl_properties(self, chembl_id: str) -> Dict[str, Any]:
+        """
+        Get target properties from ChEMBL.
+
+        Args:
+            chembl_id: ChEMBL target ID
+
+        Returns:
+            Dictionary of target properties
+        """
+        # This would typically call the ChEMBL API
+        # For now, return placeholder data
+        return {
+            "chembl_id": chembl_id,
+            "data_source": "ChEMBL"
+        }

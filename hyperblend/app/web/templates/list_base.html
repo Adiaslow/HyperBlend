@@ -260,45 +260,36 @@
         <div id="infoContainer" class="hidden">
             <div class="interaction-header">
                 <h2 class="text-xl font-bold">{{ item_type }} Details</h2>
-                <button type="button" 
-                        id="closeInfo"
-                        class="text-gray-500 hover:text-gray-700">
-                    <i class="fas fa-times"></i>
-                </button>
-            </div>
-            <div class="interaction-content">
-                <div id="infoContent">
-                    <!-- Item details will be shown here -->
-                </div>
-                {% block info_actions %}
-                <div class="info-actions">
+                <div class="flex gap-2">
                     <button type="button"
                             id="enrichButton"
-                            class="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
+                            class="px-3 py-1 bg-green-500 text-white rounded-lg hover:bg-green-600 focus:ring-2 focus:ring-green-500 focus:ring-offset-2">
                         <span class="button-content">
                             <span class="button-spinner"></span>
-                            <span class="button-text">Enrich Data</span>
+                            <span class="button-text">Enrich</span>
                         </span>
                     </button>
                     <button type="button"
                             id="deleteButton"
-                            class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
+                            class="px-3 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 focus:ring-2 focus:ring-red-500 focus:ring-offset-2">
                         <span class="button-content">
                             <span class="button-spinner"></span>
                             <span class="button-text">Delete</span>
                         </span>
                     </button>
                 </div>
-                {% endblock %}
+            </div>
+            <div id="infoContent" class="interaction-content">
+                <!-- Item details will be shown here -->
             </div>
         </div>
     </div>
 </div>
 
-<!-- Delete Confirmation Modal -->
+<!-- Delete confirmation modal -->
 <div id="deleteModal" class="modal">
     <div class="modal-content">
-        <h3 class="text-xl font-bold mb-4">Confirm Delete</h3>
+        <h3 class="text-xl font-bold mb-4">Delete {{ item_type }}</h3>
         <p>Are you sure you want to delete this {{ item_type }}? This action cannot be undone.</p>
         <div class="modal-actions">
             <button type="button"
@@ -319,357 +310,7 @@
 {% block scripts %}
 {{ super() }}
 <script>
-class ListPage {
-    constructor(itemType) {
-        this.itemType = itemType;
-        
-        // Wait for DOM to be ready before initializing
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.initialize());
-        } else {
-            this.initialize();
-        }
-    }
-
-    initialize() {
-        // Initialize DOM elements
-        this.searchInput = document.getElementById('searchInput');
-        this.itemList = document.getElementById('itemList');
-        this.databaseSelect = document.getElementById('databaseSelect');
-        this.idInput = document.getElementById('idInput');
-        this.searchButton = document.getElementById('searchButton');
-        this.previewSection = document.getElementById('previewSection');
-        this.confirmButton = document.getElementById('confirmAdd');
-        
-        // Info container elements
-        this.addContainer = document.getElementById('addContainer');
-        this.infoContainer = document.getElementById('infoContainer');
-        this.infoContent = document.getElementById('infoContent');
-        this.closeInfo = document.getElementById('closeInfo');
-        this.enrichButton = document.getElementById('enrichButton');
-        this.deleteButton = document.getElementById('deleteButton');
-        
-        // Modal elements
-        this.deleteModal = document.getElementById('deleteModal');
-        this.cancelDelete = document.getElementById('cancelDelete');
-        this.confirmDelete = document.getElementById('confirmDelete');
-        
-        this.selectedItemId = null;
-
-        // Initialize event listeners and load items
-        if (this.searchInput && this.itemList) {
-            this.initializeEventListeners();
-            this.loadItems();
-        } else {
-            console.error('Required DOM elements not found during initialization');
-        }
-    }
-
-    initializeEventListeners() {
-        // Search functionality
-        this.searchInput.addEventListener('input', debounce(() => this.handleSearch(), 300));
-        
-        // Database selection
-        this.databaseSelect.addEventListener('change', () => {
-            this.clearPreview();
-            this.confirmButton.disabled = true;
-        });
-        
-        // Search button click
-        this.searchButton.addEventListener('click', () => this.searchDatabase());
-        
-        // ID input enter key
-        this.idInput.addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                this.searchDatabase();
-            }
-        });
-        
-        // Confirm button
-        this.confirmButton.addEventListener('click', () => this.handleConfirm());
-
-        // Info container buttons
-        this.closeInfo.addEventListener('click', () => this.showAddContainer());
-        this.enrichButton.addEventListener('click', () => this.enrichItem());
-        this.deleteButton.addEventListener('click', () => this.showDeleteModal());
-
-        // Delete modal buttons
-        this.cancelDelete.addEventListener('click', () => this.hideDeleteModal());
-        this.confirmDelete.addEventListener('click', () => this.deleteItem());
-    }
-
-    showInfoContainer(item) {
-        this.selectedItemId = item.id;
-        this.addContainer.classList.add('hidden');
-        this.infoContainer.classList.remove('hidden');
-        this.infoContent.innerHTML = this.getItemInfoHtml(item);
-    }
-
-    showAddContainer() {
-        this.selectedItemId = null;
-        this.infoContainer.classList.add('hidden');
-        this.addContainer.classList.remove('hidden');
-        // Clear any selected state from items
-        const items = this.itemList.querySelectorAll('.item-card');
-        items.forEach(item => item.classList.remove('selected'));
-    }
-
-    showDeleteModal() {
-        this.deleteModal.classList.add('visible');
-    }
-
-    hideDeleteModal() {
-        this.deleteModal.classList.remove('visible');
-    }
-
-    setButtonLoading(button, isLoading) {
-        if (!button) return;
-        const spinner = button.querySelector('.button-spinner');
-        if (spinner) {
-            spinner.classList.toggle('loading', isLoading);
-        }
-        button.disabled = isLoading;
-    }
-
-    async searchDatabase() {
-        const database = this.databaseSelect.value;
-        const id = this.idInput.value.trim();
-
-        if (!database || !id) {
-            this.showError('Please select a database and enter an identifier');
-            return;
-        }
-
-        try {
-            this.setButtonLoading(this.searchButton, true);
-            this.previewSection.innerHTML = `
-                <div class="flex items-center justify-center p-4">
-                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-                </div>
-            `;
-            this.previewSection.classList.remove('hidden');
-
-            const response = await fetch(`/api/${this.itemType}s/search/${database}/${encodeURIComponent(id)}`);
-            const data = await response.json();
-
-            if (response.ok) {
-                this.previewSection.innerHTML = this.getPreviewHtml(data);
-                this.confirmButton.disabled = false;
-            } else {
-                this.showError(data.error || 'Failed to find item');
-                this.confirmButton.disabled = true;
-            }
-        } catch (error) {
-            console.error('Error searching database:', error);
-            this.showError('Error searching database');
-            this.confirmButton.disabled = true;
-        } finally {
-            this.setButtonLoading(this.searchButton, false);
-        }
-    }
-
-    async handleConfirm() {
-        const database = this.databaseSelect.value;
-        const id = this.idInput.value;
-
-        if (!database || !id) {
-            this.showError('Please select a database and enter an ID');
-            return;
-        }
-
-        try {
-            this.setButtonLoading(this.confirmButton, true);
-            const response = await fetch(`/api/${this.itemType}s/add`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    type: database,
-                    identifier: id
-                })
-            });
-
-            const data = await response.json();
-            
-            if (response.ok) {
-                this.clearPreview();
-                this.databaseSelect.value = '';
-                this.idInput.value = '';
-                this.confirmButton.disabled = true;
-                await this.loadItems(this.searchInput.value);
-            } else {
-                this.showError(data.error || 'Error adding item');
-            }
-        } catch (error) {
-            console.error('Error adding item:', error);
-            this.showError('Error adding item');
-        } finally {
-            this.setButtonLoading(this.confirmButton, false);
-        }
-    }
-
-    async enrichItem() {
-        if (!this.selectedItemId) return;
-
-        try {
-            this.setButtonLoading(this.enrichButton, true);
-            const response = await fetch(`/api/${this.itemType}s/${this.selectedItemId}/enrich`, {
-                method: 'POST'
-            });
-
-            if (response.ok) {
-                await this.loadItemDetails(this.selectedItemId);
-            } else {
-                const data = await response.json();
-                this.showError(data.error || 'Failed to enrich item');
-            }
-        } catch (error) {
-            console.error('Error enriching item:', error);
-            this.showError('Error enriching item');
-        } finally {
-            this.setButtonLoading(this.enrichButton, false);
-        }
-    }
-
-    async deleteItem() {
-        if (!this.selectedItemId) return;
-
-        try {
-            this.setButtonLoading(this.deleteButton, true);
-            const response = await fetch(`/api/${this.itemType}s/${this.selectedItemId}`, {
-                method: 'DELETE'
-            });
-
-            if (response.ok) {
-                this.hideDeleteModal();
-                this.showAddContainer();
-                await this.loadItems(this.searchInput.value);
-            } else {
-                const data = await response.json();
-                this.showError(data.error || 'Failed to delete item');
-            }
-        } catch (error) {
-            console.error('Error deleting item:', error);
-            this.showError('Error deleting item');
-        } finally {
-            this.setButtonLoading(this.deleteButton, false);
-        }
-    }
-
-    async loadItemDetails(itemId) {
-        try {
-            const response = await fetch(`/api/${this.itemType}s/${itemId}`);
-            const data = await response.json();
-            if (response.ok) {
-                this.showInfoContainer(data);
-            } else {
-                this.showError(data.error || 'Failed to load item details');
-            }
-        } catch (error) {
-            console.error('Error loading item details:', error);
-            this.showError('Error loading item details');
-        }
-    }
-
-    clearPreview() {
-        this.previewSection.classList.add('hidden');
-        this.previewSection.innerHTML = '';
-    }
-
-    async loadItems(query = '') {
-        try {
-            const response = await fetch(`/api/${this.itemType}s?q=${encodeURIComponent(query)}`);
-            const data = await response.json();
-            if (data.error) {
-                throw new Error(data.error);
-            }
-            this.renderItems(data.items || []);
-        } catch (error) {
-            console.error('Error loading items:', error);
-            this.itemList.innerHTML = `
-                <div class="text-red-600 p-4">
-                    Error loading items: ${error.message}
-                </div>
-            `;
-        }
-    }
-
-    async handleSearch() {
-        const query = this.searchInput.value;
-        await this.loadItems(query);
-    }
-
-    showError(message) {
-        this.previewSection.innerHTML = `
-            <div class="text-red-600 p-4">
-                ${message}
-            </div>
-        `;
-        this.previewSection.classList.remove('hidden');
-    }
-
-    renderItems(items) {
-        if (!Array.isArray(items)) {
-            console.error('Expected items to be an array, got:', items);
-            items = [];
-        }
-        this.itemList.innerHTML = items.length > 0
-            ? items.map(item => this.getItemHtml(item)).join('')
-            : '<div class="text-gray-500 p-4">No items found</div>';
-
-        // Add click handlers to items
-        const itemCards = this.itemList.querySelectorAll('.item-card');
-        itemCards.forEach(card => {
-            card.addEventListener('click', () => {
-                const itemId = card.dataset.itemId;
-                // Update selected state
-                itemCards.forEach(c => c.classList.remove('selected'));
-                card.classList.add('selected');
-                // Load and show item details
-                this.loadItemDetails(itemId);
-            });
-        });
-    }
-
-    getItemHtml(item) {
-        return `
-            <div class="item-card" data-item-id="${item.id}">
-                <h3 class="text-lg font-semibold">${item.name}</h3>
-                ${item.description ? `<p class="text-gray-600 mt-1">${item.description}</p>` : ''}
-                ${this.getItemSpecificHtml(item)}
-            </div>
-        `;
-    }
-
-    getItemSpecificHtml(item) {
-        // Override in specific page implementations
-        return '';
-    }
-
-    getPreviewHtml(data) {
-        // Override in specific page implementations
-        return '';
-    }
-
-    getItemInfoHtml(item) {
-        // Override in specific page implementations
-        return this.getPreviewHtml(item);
-    }
-}
-
-// Utility function for debouncing
-function debounce(func, wait) {
-    let timeout;
-    return function executedFunction(...args) {
-        const later = () => {
-            clearTimeout(timeout);
-            func(...args);
-        };
-        clearTimeout(timeout);
-        timeout = setTimeout(later, wait);
-    };
-}
+    // Pass item type to JavaScript
+    window.itemType = '{{ item_type }}';
 </script>
 {% endblock %} 

@@ -10,10 +10,13 @@ from pydantic_settings import BaseSettings
 import os
 from dotenv import load_dotenv
 from typing import Optional
+from pathlib import Path
 
 # Load environment variables from .env file
 load_dotenv()
 
+# Get the app's root directory
+APP_DIR = Path(__file__).parent.parent
 
 class Settings(BaseSettings):
     """Application settings."""
@@ -22,8 +25,8 @@ class Settings(BaseSettings):
     FLASK_APP: str = "hyperblend.app"
     FLASK_ENV: str = "development"
     SECRET_KEY: str = os.getenv("SECRET_KEY", "your-secret-key-here")
-    STATIC_FOLDER: str = "static"
-    TEMPLATE_FOLDER: str = "templates"
+    STATIC_FOLDER: str = str(APP_DIR / "web" / "static")
+    TEMPLATE_FOLDER: str = str(APP_DIR / "web" / "templates")
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "*")
     HOST: str = os.getenv("HOST", "127.0.0.1")
     PORT: int = int(os.getenv("PORT", "5001"))
@@ -48,7 +51,11 @@ class Settings(BaseSettings):
 
     def to_dict(self):
         """Convert settings to a dictionary."""
-        return self.model_dump()
+        return {
+            key: getattr(self, key)
+            for key in self.__annotations__
+            if not key.startswith("_")
+        }
 
 
 # Create settings instance

@@ -3,15 +3,17 @@
 import logging
 from typing import List, Optional, Dict, Any
 from py2neo import Graph, NodeMatcher
+from hyperblend.app.web.core.exceptions import ResourceNotFoundError
+from .base_service import BaseService
 
 from hyperblend.models.molecule import Molecule
-from .base_service import BaseInternalService
 from hyperblend.services.external.pubchem_service import PubChemService
 from hyperblend.services.external.chembl_service import ChEMBLService
 from hyperblend.services.external.drugbank_service import DrugBankService
 
+logger = logging.getLogger(__name__)
 
-class MoleculeService(BaseInternalService):
+class MoleculeService(BaseService):
     """Service for querying molecules from the database."""
 
     def __init__(self, graph: Graph, drugbank_api_key: Optional[str] = None):
@@ -22,10 +24,7 @@ class MoleculeService(BaseInternalService):
             graph: Neo4j graph database connection
             drugbank_api_key: Optional DrugBank API key
         """
-        # Call parent class constructor first
         super().__init__(graph)
-
-        # Initialize service-specific attributes
         self.matcher = NodeMatcher(graph)
         self.pubchem_service = PubChemService(graph)
         self.chembl_service = ChEMBLService(graph)
@@ -209,107 +208,281 @@ class MoleculeService(BaseInternalService):
 
     def get_molecule(self, molecule_id: str) -> Optional[Dict[str, Any]]:
         """
-        Get a molecule by ID.
+        Get a specific molecule by ID.
 
         Args:
-            molecule_id: The molecule ID in format 'database:uuid:number'
+            molecule_id: The ID of the molecule to retrieve
 
         Returns:
-            Optional[Dict[str, Any]]: Molecule data if found, None otherwise
+            Dictionary containing molecule details and relationships
         """
         try:
-            # Extract the numeric ID from the full element ID format
-            id_parts = molecule_id.split(":")
-            if len(id_parts) != 3:
-                self.logger.error(f"Invalid molecule ID format: {molecule_id}")
-                return None
-
-            numeric_id = id_parts[2]  # Get the last part which is the numeric ID
-
-            # Query to get molecule details
             cypher_query = """
             MATCH (m:Molecule)
-            WHERE toString(elementId(m)) ENDS WITH $numeric_id
-            WITH m
-            OPTIONAL MATCH (m)-[:HAS_SYNONYM]->(s:Synonym)
-            WITH m, collect(DISTINCT s.name) as synonyms
+            WHERE elementId(m) = $molecule_id
+            OPTIONAL MATCH (m)-[r]-(related)
+            WHERE (related:Target OR related:Organism)
+            WITH m, collect(DISTINCT {
+                id: toString(elementId(related)),
+                name: related.name,
+                type: labels(related)[0],
+                relationship_type: type(r),
+                activity_type: r.activity_type,
+                activity_value: r.activity_value,
+                activity_unit: r.activity_unit,
+                confidence_score: r.confidence_score
+            }) as relationships
             RETURN {
                 id: toString(elementId(m)),
                 name: m.name,
-                description: m.description,
                 formula: m.formula,
                 molecular_weight: m.molecular_weight,
                 smiles: m.smiles,
                 inchi: m.inchi,
                 inchikey: m.inchikey,
-                logp: m.logp,
-                polar_surface_area: m.polar_surface_area,
                 pubchem_cid: m.pubchem_cid,
                 chembl_id: m.chembl_id,
-                synonyms: synonyms,
-                source: m.source
+                drugbank_id: m.drugbank_id,
+                logp: m.logp,
+                polar_surface_area: m.polar_surface_area,
+                relationships: relationships
             } as molecule
             """
-
-            # Execute query and get result
-            result = self.graph.run(cypher_query, numeric_id=numeric_id).data()
-
-            if not result:
-                self.logger.warning(f"No molecule found with ID: {molecule_id}")
-                return None
-
-            molecule_data = result[0].get("molecule")
-            if not molecule_data:
-                self.logger.error(
-                    f"Unexpected query result format for molecule ID: {molecule_id}"
-                )
-                return None
-
-            return molecule_data
-
+            result = self.run_query(cypher_query, {"molecule_id": self._validate_id(molecule_id)})
+            return result[0]["molecule"] if result else None
         except Exception as e:
-            self.logger.error(f"Error getting molecule: {str(e)}")
-            raise
+            self._handle_db_error(e, f"getting molecule {molecule_id}")
 
     def get_all_molecules(self) -> List[Dict[str, Any]]:
-        """Get all molecules."""
-        query = """
-        MATCH (m:Molecule)
-        RETURN m
         """
-        results = self.graph.run(query)
-        return [
-            {
-                "id": str(result["m"].id),
-                "name": result["m"]["name"],
-                "smiles": result["m"].get("smiles"),
-                "description": result["m"].get("description"),
-                "source": result["m"].get("source"),
-            }
-            for result in results
-        ]
+        Get all molecules.
 
-    def search_molecules(self, search_term: str) -> List[Dict[str, Any]]:
-        """Search for molecules by name or description."""
-        query = """
-        MATCH (m:Molecule)
-        WHERE toLower(m.name) CONTAINS toLower($search_term)
-           OR toLower(coalesce(m.description, '')) CONTAINS toLower($search_term)
-        OPTIONAL MATCH (m)-[:FROM_ORGANISM]->(o:Organism)
-        RETURN m,
-               collect(DISTINCT o.name) as organisms
+        Returns:
+            List of dictionaries containing molecule details
         """
-        results = self.graph.run(query, search_term=search_term)
-        return [
-            {
-                "id": str(result["m"].id),
-                "name": result["m"]["name"],
-                "smiles": result["m"].get("smiles"),
-                "description": result["m"].get("description"),
-                "organisms": result["organisms"],
-            }
-            for result in results
-        ]
+        try:
+            cypher_query = """
+            MATCH (m:Molecule)
+            RETURN {
+                id: toString(elementId(m)),
+                name: m.name,
+                formula: m.formula,
+                smiles: m.smiles,
+                molecular_weight: m.molecular_weight
+            } as molecule
+            """
+            result = self.run_query(cypher_query)
+            return [r["molecule"] for r in result]
+        except Exception as e:
+            self._handle_db_error(e, "getting all molecules")
+
+    def search_molecules(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Search for molecules by name, formula, or SMILES.
+
+        Args:
+            query: Search query string
+
+        Returns:
+            List of dictionaries containing matching molecule details
+        """
+        try:
+            cypher_query = """
+            MATCH (m:Molecule)
+            WHERE m.name =~ $query 
+               OR m.formula =~ $query 
+               OR m.smiles =~ $query
+            RETURN {
+                id: toString(elementId(m)),
+                name: m.name,
+                formula: m.formula,
+                smiles: m.smiles,
+                molecular_weight: m.molecular_weight
+            } as molecule
+            """
+            result = self.run_query(cypher_query, {"query": f"(?i).*{query}.*"})
+            return [r["molecule"] for r in result]
+        except Exception as e:
+            self._handle_db_error(e, f"searching molecules with query {query}")
+
+    def create_molecule(self, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Create a new molecule.
+
+        Args:
+            data: Dictionary containing molecule properties
+
+        Returns:
+            Dictionary containing created molecule details
+        """
+        try:
+            cypher_query = """
+            CREATE (m:Molecule)
+            SET m += $data
+            RETURN {
+                id: toString(elementId(m)),
+                name: m.name,
+                formula: m.formula,
+                molecular_weight: m.molecular_weight,
+                smiles: m.smiles,
+                inchi: m.inchi,
+                inchikey: m.inchikey,
+                pubchem_cid: m.pubchem_cid,
+                chembl_id: m.chembl_id,
+                drugbank_id: m.drugbank_id,
+                logp: m.logp,
+                polar_surface_area: m.polar_surface_area
+            } as molecule
+            """
+            result = self.run_query(cypher_query, {"data": data})
+            return result[0]["molecule"] if result else None
+        except Exception as e:
+            self._handle_db_error(e, "creating molecule")
+
+    def update_molecule(self, molecule_id: str, data: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """
+        Update an existing molecule.
+
+        Args:
+            molecule_id: ID of the molecule to update
+            data: Dictionary containing updated molecule properties
+
+        Returns:
+            Dictionary containing updated molecule details
+        """
+        try:
+            cypher_query = """
+            MATCH (m:Molecule)
+            WHERE elementId(m) = $molecule_id
+            SET m += $data
+            RETURN {
+                id: toString(elementId(m)),
+                name: m.name,
+                formula: m.formula,
+                molecular_weight: m.molecular_weight,
+                smiles: m.smiles,
+                inchi: m.inchi,
+                inchikey: m.inchikey,
+                pubchem_cid: m.pubchem_cid,
+                chembl_id: m.chembl_id,
+                drugbank_id: m.drugbank_id,
+                logp: m.logp,
+                polar_surface_area: m.polar_surface_area
+            } as molecule
+            """
+            result = self.run_query(cypher_query, {
+                "molecule_id": self._validate_id(molecule_id),
+                "data": data
+            })
+            return result[0]["molecule"] if result else None
+        except Exception as e:
+            self._handle_db_error(e, f"updating molecule {molecule_id}")
+
+    def delete_molecule(self, molecule_id: str) -> bool:
+        """
+        Delete a molecule.
+
+        Args:
+            molecule_id: ID of the molecule to delete
+
+        Returns:
+            True if deletion was successful
+        """
+        try:
+            cypher_query = """
+            MATCH (m:Molecule)
+            WHERE elementId(m) = $molecule_id
+            DETACH DELETE m
+            """
+            self.run_query(cypher_query, {"molecule_id": self._validate_id(molecule_id)})
+            return True
+        except Exception as e:
+            self._handle_db_error(e, f"deleting molecule {molecule_id}")
+            return False
+
+    def enrich_molecule(self, molecule_id: str, database: str, identifier: str) -> Optional[Dict[str, Any]]:
+        """
+        Enrich a molecule with data from external databases.
+
+        Args:
+            molecule_id: ID of the molecule to enrich
+            database: Name of the external database (e.g., "pubchem", "chembl")
+            identifier: Identifier in the external database
+
+        Returns:
+            Dictionary containing enriched molecule details
+        """
+        try:
+            # First verify the molecule exists
+            molecule = self.get_molecule(molecule_id)
+            if not molecule:
+                raise ResourceNotFoundError(f"Molecule {molecule_id} not found")
+
+            # Get properties based on database type
+            if database == "pubchem":
+                properties = self._get_pubchem_properties(identifier)
+            elif database == "chembl":
+                properties = self._get_chembl_properties(identifier)
+            else:
+                raise ValueError(f"Unsupported database: {database}")
+
+            # Update molecule with new properties
+            cypher_query = """
+            MATCH (m:Molecule)
+            WHERE elementId(m) = $molecule_id
+            SET m += $properties
+            WITH m
+            OPTIONAL MATCH (m)-[r]-(related)
+            WHERE (related:Target OR related:Organism)
+            WITH m, collect(DISTINCT {
+                id: toString(elementId(related)),
+                name: related.name,
+                type: labels(related)[0],
+                relationship_type: type(r)
+            }) as relationships
+            RETURN {
+                id: toString(elementId(m)),
+                name: m.name,
+                formula: m.formula,
+                molecular_weight: m.molecular_weight,
+                smiles: m.smiles,
+                inchi: m.inchi,
+                inchikey: m.inchikey,
+                pubchem_cid: m.pubchem_cid,
+                chembl_id: m.chembl_id,
+                drugbank_id: m.drugbank_id,
+                logp: m.logp,
+                polar_surface_area: m.polar_surface_area,
+                relationships: relationships,
+                enriched_from: $database
+            } as molecule
+            """
+            result = self.run_query(cypher_query, {
+                "molecule_id": self._validate_id(molecule_id),
+                "properties": properties,
+                "database": database
+            })
+            return result[0]["molecule"] if result else None
+        except Exception as e:
+            self._handle_db_error(e, f"enriching molecule {molecule_id}")
+
+    def _get_pubchem_properties(self, cid: str) -> Dict[str, Any]:
+        """Get molecule properties from PubChem."""
+        # This would typically call the PubChem API
+        # For now, return placeholder data
+        return {
+            "pubchem_cid": cid,
+            "data_source": "PubChem"
+        }
+
+    def _get_chembl_properties(self, chembl_id: str) -> Dict[str, Any]:
+        """Get molecule properties from ChEMBL."""
+        # This would typically call the ChEMBL API
+        # For now, return placeholder data
+        return {
+            "chembl_id": chembl_id,
+            "data_source": "ChEMBL"
+        }
 
     def create_molecule_from_pubchem(self, identifier: str) -> Optional[Molecule]:
         """
@@ -342,57 +515,6 @@ class MoleculeService(BaseInternalService):
                 f"Error creating molecule from PubChem {identifier}: {str(e)}"
             )
             return None
-
-    def update_molecule(self, molecule_id: str, enriched_data: Molecule) -> bool:
-        """
-        Update a molecule with enriched data.
-
-        Args:
-            molecule_id: The molecule ID in format 'database:uuid:number'
-            enriched_data: The enriched molecule data
-
-        Returns:
-            bool: True if update was successful, False otherwise
-        """
-        try:
-            # Extract the numeric ID from the full element ID format
-            id_parts = molecule_id.split(":")
-            if len(id_parts) != 3:
-                self.logger.error(f"Invalid molecule ID format: {molecule_id}")
-                return False
-
-            numeric_id = id_parts[2]  # Get the last part which is the numeric ID
-
-            # Prepare update data
-            update_data = {
-                "name": enriched_data.name,
-                "formula": enriched_data.formula,
-                "molecular_weight": enriched_data.molecular_weight,
-                "smiles": enriched_data.smiles,
-                "inchi": enriched_data.inchi,
-                "inchikey": enriched_data.inchikey,
-                "pubchem_cid": enriched_data.pubchem_cid,
-                "chembl_id": enriched_data.chembl_id,
-                "logp": enriched_data.logp,
-                "polar_surface_area": enriched_data.polar_surface_area,
-            }
-
-            # Update query
-            cypher_query = """
-            MATCH (m:Molecule)
-            WHERE toString(elementId(m)) ENDS WITH $numeric_id
-            SET m += $update_data
-            RETURN m
-            """
-
-            result = self.graph.run(
-                cypher_query, numeric_id=numeric_id, update_data=update_data
-            ).data()
-            return len(result) > 0
-
-        except Exception as e:
-            self.logger.error(f"Error updating molecule: {str(e)}")
-            return False
 
     def create_molecule_from_drugbank(self, drugbank_id: str) -> Optional[Molecule]:
         """

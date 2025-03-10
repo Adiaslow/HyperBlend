@@ -3,22 +3,112 @@
 import logging
 from typing import List, Optional, Dict, Any
 from py2neo import Graph, NodeMatcher
+from hyperblend.app.web.core.exceptions import ResourceNotFoundError
+from hyperblend.db.neo4j import db
 
-from .base_service import BaseInternalService
+from .base_service import BaseService
+
+logger = logging.getLogger(__name__)
 
 
-class OrganismService(BaseInternalService):
-    """Service for querying organisms from the database."""
+class OrganismService(BaseService):
+    """Service for handling organism-related operations."""
 
     def __init__(self, graph: Graph):
-        """
-        Initialize the organism service.
-
+        """Initialize the organism service.
+        
         Args:
             graph: Neo4j graph database connection
         """
         super().__init__(graph)
         self.matcher = NodeMatcher(graph)
+
+    def get_organism(self, organism_id: str) -> Optional[Dict[str, Any]]:
+        """
+        Get a specific organism by ID.
+
+        Args:
+            organism_id: The ID of the organism to retrieve
+
+        Returns:
+            Dictionary containing organism details and related molecules
+        """
+        try:
+            cypher_query = """
+            MATCH (o:Organism)
+            WHERE elementId(o) = $organism_id
+            OPTIONAL MATCH (o)<-[r]-(m:Molecule)
+            WITH o, collect({
+                id: toString(elementId(m)),
+                name: m.name,
+                smiles: m.smiles,
+                relationship: type(r)
+            }) as molecules
+            RETURN {
+                id: toString(elementId(o)),
+                name: o.name,
+                description: o.description,
+                taxonomy: o.taxonomy,
+                molecules: molecules
+            } as organism
+            """
+            result = self.graph.run(cypher_query, organism_id=int(organism_id)).data()
+            return result[0]['organism'] if result else None
+        except Exception as e:
+            logger.error(f"Error getting organism {organism_id}: {str(e)}")
+            raise
+
+    def get_all_organisms(self) -> List[Dict[str, Any]]:
+        """
+        Get all organisms.
+
+        Returns:
+            List of dictionaries containing organism details
+        """
+        try:
+            cypher_query = """
+            MATCH (o:Organism)
+            RETURN {
+                id: toString(elementId(o)),
+                name: o.name,
+                description: o.description,
+                taxonomy: o.taxonomy
+            } as organism
+            """
+            result = self.graph.run(cypher_query).data()
+            return [r['organism'] for r in result]
+        except Exception as e:
+            logger.error(f"Error getting all organisms: {str(e)}")
+            raise
+
+    def search_organisms(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Search for organisms by name, description, or taxonomy.
+
+        Args:
+            query: Search query string
+
+        Returns:
+            List of dictionaries containing matching organism details
+        """
+        try:
+            cypher_query = """
+            MATCH (o:Organism)
+            WHERE o.name =~ $query 
+               OR o.description =~ $query 
+               OR o.taxonomy =~ $query
+            RETURN {
+                id: toString(elementId(o)),
+                name: o.name,
+                description: o.description,
+                taxonomy: o.taxonomy
+            } as organism
+            """
+            result = self.graph.run(cypher_query, query=f"(?i).*{query}.*").data()
+            return [r['organism'] for r in result]
+        except Exception as e:
+            logger.error(f"Error searching organisms with query {query}: {str(e)}")
+            raise
 
     def find_by_name(self, name: str, exact: bool = False) -> List[Dict[str, Any]]:
         """

@@ -1,90 +1,182 @@
 // hyperblend/app/web/static/js/api.js
 
 class HyperBlendAPI {
-    constructor(baseURL = '') {
-        this.baseURL = baseURL;
+    constructor(baseUrl = '') {
+        this.baseUrl = baseUrl;
+        this.initialized = false;
+        this.initializationPromise = null;
     }
 
+    async waitForInitialization() {
+        if (this.initialized) {
+            return true;
+        }
+
+        if (!this.initializationPromise) {
+            this.initializationPromise = this.initialize();
+        }
+
+        return this.initializationPromise;
+    }
+
+    async initialize() {
+        try {
+            console.log('Initializing API client...');
+            
+            // Try to access storage, but don't fail if it's not available
+            try {
+                // Check if we have cached credentials or settings
+                if (window.localStorage) {
+                    const cachedData = window.localStorage.getItem('hyperblend_api_cache');
+                    if (cachedData) {
+                        const data = JSON.parse(cachedData);
+                        // Use cached data if available and not expired
+                        if (data && data.expires > Date.now()) {
+                            Object.assign(this, data.settings);
+                        }
+                    }
+                }
+            } catch (storageError) {
+                console.warn('Storage access not available:', storageError);
+                // Continue initialization without storage access
+            }
+
+            // Make a simple test request to verify API connectivity
+            const response = await fetch(`${this.baseUrl}/api/statistics`);
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            await response.json();
+            
+            this.initialized = true;
+            console.log('API client initialized successfully');
+            return true;
+        } catch (error) {
+            console.error('Error initializing API client:', error);
+            this.initialized = false;
+            throw error;
+        }
+    }
+
+    async fetchJson(endpoint, options = {}) {
+        if (!this.initialized) {
+            throw new Error('API client not initialized');
+        }
+
+        const maxRetries = 3;
+        let retryCount = 0;
+        let lastError;
+
+        while (retryCount < maxRetries) {
+            try {
+                const response = await fetch(`${this.baseUrl}${endpoint}`, {
+                    ...options,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...options.headers
+                    }
+                });
+                
+                if (response.status === 503) {
+                    retryCount++;
+                    if (retryCount < maxRetries) {
+                        // Wait for a bit before retrying (exponential backoff)
+                        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+                        continue;
+                    }
+                }
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                return await response.json();
+            } catch (error) {
+                lastError = error;
+                if (retryCount >= maxRetries - 1) {
+                    console.error(`API Error (${endpoint}):`, error);
+                    throw error;
+                }
+                retryCount++;
+                // Wait before retrying
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+            }
+        }
+        
+        throw lastError;
+    }
+
+    // Statistics
     async getStatistics() {
-        const response = await fetch(`${this.baseURL}/api/statistics`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch statistics');
-        }
-        return await response.json();
+        return this.fetchJson('/api/statistics');
     }
 
+    // Molecules
+    async listMolecules(query = '') {
+        return this.fetchJson(`/api/molecules${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    }
+
+    async getMolecule(id) {
+        return this.fetchJson(`/api/molecules/${id}`);
+    }
+
+    // Targets
+    async listTargets(query = '') {
+        return this.fetchJson(`/api/targets${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    }
+
+    async getTarget(id) {
+        return this.fetchJson(`/api/targets/${id}`);
+    }
+
+    // Organisms
+    async listOrganisms(query = '') {
+        return this.fetchJson(`/api/organisms${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    }
+
+    async getOrganism(id) {
+        return this.fetchJson(`/api/organisms/${id}`);
+    }
+
+    // Effects
+    async listEffects(query = '') {
+        return this.fetchJson(`/api/effects${query ? `?q=${encodeURIComponent(query)}` : ''}`);
+    }
+
+    async getEffect(id) {
+        return this.fetchJson(`/api/effects/${id}`);
+    }
+
+    // Graph Data
     async getGraphData(query = '') {
-        const response = await fetch(`${this.baseURL}/api/graph?q=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch graph data');
-        }
-        return await response.json();
+        return this.fetchJson(`/api/graph${query ? `?q=${encodeURIComponent(query)}` : ''}`);
     }
 
-    async getNodeDetails(nodeId) {
-        const response = await fetch(`${this.baseURL}/api/nodes/${nodeId}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch node details');
-        }
-        return await response.json();
+    // Node Details
+    async getNodeDetails(id) {
+        return this.fetchJson(`/api/nodes/${id}`);
     }
 
-    async getMoleculeDetails(moleculeId) {
-        const response = await fetch(`${this.baseURL}/api/molecules/${moleculeId}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch molecule details');
-        }
-        return await response.json();
+    // Relationships
+    async getRelationships(nodeId) {
+        return this.fetchJson(`/api/relationships?node_id=${encodeURIComponent(nodeId)}`);
     }
 
-    async getOrganismDetails(organismId) {
-        const response = await fetch(`${this.baseURL}/api/organisms/${organismId}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch organism details');
-        }
-        return await response.json();
+    // Enrichment
+    async enrichMolecule(id) {
+        return this.fetchJson(`/api/molecules/${id}/enrich`, { method: 'POST' });
     }
 
-    async getTargetDetails(targetId) {
-        const response = await fetch(`${this.baseURL}/api/targets/${targetId}`);
-        if (!response.ok) {
-            throw new Error('Failed to fetch target details');
-        }
-        return await response.json();
-    }
-
-    async searchMolecules(query) {
-        const response = await fetch(`${this.baseURL}/api/molecules/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            throw new Error('Failed to search molecules');
-        }
-        return await response.json();
-    }
-
-    async searchOrganisms(query) {
-        const response = await fetch(`${this.baseURL}/api/organisms/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            throw new Error('Failed to search organisms');
-        }
-        return await response.json();
-    }
-
-    async searchTargets(query) {
-        const response = await fetch(`${this.baseURL}/api/targets/search?q=${encodeURIComponent(query)}`);
-        if (!response.ok) {
-            throw new Error('Failed to search targets');
-        }
-        return await response.json();
+    async enrichTarget(id) {
+        return this.fetchJson(`/api/targets/${id}/enrich`, { method: 'POST' });
     }
 }
 
-// Create global API client instance and ensure it's properly initialized
-(function() {
-    try {
-        window.api = new HyperBlendAPI();
-        console.log('API client successfully initialized and attached to window');
-    } catch (error) {
-        console.error('Failed to initialize API client:', error);
-        throw error;
-    }
-})(); 
+// Initialize global API instance
+console.log('Creating API client instance...');
+window.api = new HyperBlendAPI();
+
+// Start initialization
+window.api.initialize().catch(error => {
+    console.error('Failed to initialize API client:', error);
+}); 

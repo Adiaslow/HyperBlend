@@ -19,43 +19,218 @@ class MoleculePage extends ListPage {
         super('molecule');
         this.enrichElementsInitialized = false;
         this.selectedItemId = null;
+        this.isInitialized = false;
+        this.initializationAttempts = 0;
+        this.maxInitializationAttempts = 50;
+        this.apiInitCheckInterval = 100; // ms
+        this.isInitializing = false;
         
         // Wait for DOM to be ready before initializing
         if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.initialize());
+            document.addEventListener('DOMContentLoaded', () => {
+                if (!this.isInitializing) {
+                    this.isInitializing = true;
+                    this.initializeWithRetry().catch(error => {
+                        console.error('Failed to initialize page:', error);
+                        this.showError('Failed to initialize page. Please refresh and try again.');
+                    });
+                }
+            });
         } else {
-            this.initialize();
+            if (!this.isInitializing) {
+                this.isInitializing = true;
+                this.initializeWithRetry().catch(error => {
+                    console.error('Failed to initialize page:', error);
+                    this.showError('Failed to initialize page. Please refresh and try again.');
+                });
+            }
+        }
+    }
+
+    async waitForAPI() {
+        let attempts = 0;
+        const maxAttempts = 50;
+        
+        const checkAPI = async () => {
+            // Check if window.api exists
+            if (!window.api) {
+                console.log('API client not found in window object');
+                return false;
+            }
+
+            // Check if API has required methods
+            if (typeof window.api.listMolecules !== 'function') {
+                console.log('API client missing listMolecules method');
+                return false;
+            }
+
+            // Wait for API initialization
+            try {
+                await window.api.waitForInitialization();
+                return true;
+            } catch (error) {
+                console.log('API initialization failed:', error);
+                return false;
+            }
+        };
+
+        while (attempts < maxAttempts) {
+            if (await checkAPI()) {
+                console.log('API client found and ready');
+                return window.api;
+            }
+            
+            console.log(`Waiting for API client (attempt ${attempts + 1}/${maxAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, this.apiInitCheckInterval));
+            attempts++;
+        }
+
+        // If we get here, we've timed out
+        const error = new Error('API client initialization timeout');
+        error.details = {
+            apiExists: !!window.api,
+            apiHasMethods: window.api ? typeof window.api.listMolecules === 'function' : false,
+            apiInitialized: window.api ? await window.api.waitForInitialization().catch(() => false) : false
+        };
+        throw error;
+    }
+
+    async initializeWithRetry() {
+        while (!this.isInitialized && this.initializationAttempts < this.maxInitializationAttempts) {
+            try {
+                await this.initialize();
+                this.isInitialized = true;
+                console.log('Molecule page initialized successfully');
+                return; // Exit early on success
+            } catch (error) {
+                this.initializationAttempts++;
+                console.log(`Initialization attempt ${this.initializationAttempts} failed:`, error);
+                
+                // If this was an API timeout, log more details
+                if (error.details) {
+                    console.log('API initialization state:', error.details);
+                }
+                
+                if (this.initializationAttempts < this.maxInitializationAttempts) {
+                    await new Promise(resolve => setTimeout(resolve, this.apiInitCheckInterval));
+                }
+            }
+        }
+
+        if (!this.isInitialized) {
+            const error = 'Failed to initialize page. Please refresh and try again.';
+            console.error(error);
+            this.showError(error);
         }
     }
 
     // Override initialize to handle molecule-specific initialization
-    initialize() {
-        // Initialize enrich-related elements as null initially
-        this.enrichDatabaseSelect = null;
-        this.enrichIdInput = null;
-        this.enrichSearchButton = null;
-        this.enrichPreviewSection = null;
-        this.enrichConfirmButton = null;
+    async initialize() {
+        try {
+            // Wait for API client to be fully initialized
+            this.api = await this.waitForAPI();
+            
+            if (!this.api) {
+                throw new Error('API client not found after waiting');
+            }
 
-        // Initialize base elements
-        this.searchInput = document.getElementById('searchInput');
-        this.itemList = document.getElementById('itemList');
-        this.addContainer = document.getElementById('addContainer');
-        this.infoContainer = document.getElementById('infoContainer');
-        this.infoContent = document.getElementById('infoContent');
-        
-        // Only proceed if required elements exist
-        if (this.searchInput && this.itemList) {
-            this.initializeEventListeners();
-            // Load initial items after a short delay to ensure everything is ready
-            setTimeout(() => this.loadItems(), 100);
-        } else {
-            console.error('Required base elements not found during initialization');
+            // Test API with a simple call
+            try {
+                const testResponse = await this.api.listMolecules('');
+                if (!testResponse || (typeof testResponse !== 'object')) {
+                    throw new Error('Invalid response from API test call');
+                }
+                console.log('API test call successful');
+            } catch (error) {
+                console.error('API test call failed:', error);
+                throw new Error('API test call failed: ' + error.message);
+            }
+
+            // Initialize base elements
+            this.searchInput = document.getElementById('searchInput');
+            this.itemList = document.getElementById('itemList');
+            this.addContainer = document.getElementById('addContainer');
+            this.infoContainer = document.getElementById('infoContainer');
+            this.infoContent = document.getElementById('infoContent');
+            
+            // Create loading spinner if it doesn't exist
+            if (!document.getElementById('loadingSpinner')) {
+                const spinner = document.createElement('div');
+                spinner.id = 'loadingSpinner';
+                spinner.className = 'hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+                spinner.innerHTML = `
+                    <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-white"></div>
+                `;
+                document.body.appendChild(spinner);
+            }
+            
+            // Initialize global search
+            const searchContainer = document.querySelector('.global-search');
+            if (searchContainer) {
+                this.globalSearch = new GlobalSearch(searchContainer);
+            }
+            
+            // Only proceed if required elements exist
+            if (!this.searchInput || !this.itemList) {
+                throw new Error('Required base elements not found during initialization');
+            }
+
+            // Initialize event listeners
+            await this.initializeEventListeners();
+            
+            // Load initial items
+            await this.loadItems();
+
+            // Bind relationship management functions to window
+            window.addRelationship = (moleculeId) => this.addRelationship(moleculeId);
+            window.deleteRelationship = (moleculeId, targetId) => this.deleteRelationship(moleculeId, targetId);
+
+            // Mark initialization as complete
+            this.isInitialized = true;
+            console.log('Molecule page initialized successfully');
+
+            return true;
+        } catch (error) {
+            console.error('Error during initialization:', error);
+            this.showError(`Error initializing page: ${error.message}`);
+            throw error;
         }
+    }
 
-        // Bind relationship management functions to window
-        window.addRelationship = (moleculeId) => this.addRelationship(moleculeId);
-        window.deleteRelationship = (moleculeId, targetId) => this.deleteRelationship(moleculeId, targetId);
+    showError(message) {
+        const errorHtml = `
+            <div class="p-4 text-red-600 bg-red-50 border border-red-200 rounded">
+                <p class="font-medium">Error</p>
+                <p class="text-sm">${message}</p>
+            </div>
+        `;
+        
+        if (this.itemList) {
+            this.itemList.innerHTML = errorHtml;
+        } else if (this.infoContent) {
+            this.infoContent.innerHTML = errorHtml;
+        } else {
+            // If neither exists, create a floating error message
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'fixed top-4 right-4 max-w-md z-50';
+            errorDiv.innerHTML = errorHtml;
+            document.body.appendChild(errorDiv);
+            setTimeout(() => errorDiv.remove(), 5000);
+        }
+    }
+
+    showLoading() {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) {
+            spinner.classList.remove('hidden');
+        }
+    }
+
+    hideLoading() {
+        const spinner = document.getElementById('loadingSpinner');
+        if (spinner) {
+            spinner.classList.add('hidden');
+        }
     }
 
     // Override parent's initializeEventListeners
@@ -80,9 +255,26 @@ class MoleculePage extends ListPage {
         // Set the selected item ID
         this.selectedItemId = item.id;
         
+        // Store the current state of the add container for restoration
+        this.previousAddContainerState = this.addContainer ? this.addContainer.classList.contains('hidden') : true;
+        
         // Hide add container and show info container
         if (this.addContainer) this.addContainer.classList.add('hidden');
-        if (this.infoContainer) this.infoContainer.classList.remove('hidden');
+        if (this.infoContainer) {
+            this.infoContainer.classList.remove('hidden');
+            // Add close button if not already present
+            if (!this.infoContainer.querySelector('.close-button')) {
+                const closeButton = document.createElement('button');
+                closeButton.className = 'close-button absolute top-4 right-4 text-gray-500 hover:text-gray-700';
+                closeButton.innerHTML = `
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                `;
+                closeButton.addEventListener('click', () => this.closeInfoContainer());
+                this.infoContainer.insertBefore(closeButton, this.infoContainer.firstChild);
+            }
+        }
         
         // Update info content
         if (this.infoContent) {
@@ -99,6 +291,17 @@ class MoleculePage extends ListPage {
             // Load targets for the relationship form
             this.loadTargets();
         }
+    }
+
+    closeInfoContainer() {
+        if (this.infoContainer) {
+            this.infoContainer.classList.add('hidden');
+            // Restore the previous state of the add container
+            if (this.addContainer && !this.previousAddContainerState) {
+                this.addContainer.classList.remove('hidden');
+            }
+        }
+        this.selectedItemId = null;
     }
 
     initializeEnrichElements() {
@@ -170,29 +373,62 @@ class MoleculePage extends ListPage {
 
     async loadItems(query = '') {
         try {
-            const response = await fetch(`/api/molecules?q=${encodeURIComponent(query)}`);
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
+            // If we're already loading, skip
+            if (this.isLoading) {
+                console.log('Skipping load - already loading');
+                return;
             }
-            const text = await response.text();
-            let data;
-            try {
-                data = JSON.parse(text);
-            } catch (e) {
-                console.error('Failed to parse JSON:', text);
-                throw new Error('Invalid JSON response from server');
+
+            this.isLoading = true;
+            this.showLoading();
+            
+            const response = await this.api.listMolecules(query);
+            console.log('Received molecules response:', response);
+            
+            // Handle response based on structure
+            let newItems = [];
+            if (response && typeof response === 'object') {
+                if (Array.isArray(response)) {
+                    newItems = response;
+                } else if (response.status === 'success' && Array.isArray(response.molecules)) {
+                    newItems = response.molecules;
+                } else if (response.items && Array.isArray(response.items)) {
+                    newItems = response.items;
+                }
             }
             
-            // Ensure we're passing an array to renderItems
-            const items = Array.isArray(data) ? data : (data.items || []);
-            this.renderItems(items);
+            // Update items if:
+            // 1. We have new items OR
+            // 2. We have a search query OR
+            // 3. This is our first load
+            if (newItems.length > 0 || query !== '' || !this.initialLoadComplete) {
+                this.items = newItems;
+                console.log(`Processed ${this.items.length} molecules:`, this.items);
+            }
+            
+            // Always render items, even if empty
+            this.renderItems();
+            this.updateItemCount();
+            
+            // Mark initial load as complete
+            if (!this.initialLoadComplete) {
+                this.initialLoadComplete = true;
+                console.log('Initial load complete');
+            }
         } catch (error) {
             console.error('Error loading molecules:', error);
-            this.itemList.innerHTML = `
-                <div class="text-red-600 p-4">
-                    Error loading molecules: ${error.message}
-                </div>
-            `;
+            this.showError(`Error loading molecules. Please try again. ${error.message}`);
+            if (this.itemList) {
+                this.itemList.innerHTML = `
+                    <div class="p-4 text-red-600 bg-red-50 border border-red-200 rounded">
+                        <p class="font-medium">Error loading molecules</p>
+                        <p class="text-sm">${error.message}</p>
+                    </div>
+                `;
+            }
+        } finally {
+            this.isLoading = false;
+            this.hideLoading();
         }
     }
 

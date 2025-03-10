@@ -39,19 +39,40 @@ class GraphVisualization {
         console.log('Using D3 force simulation');
         this.layout = d3.forceSimulation()
             .force('link', d3.forceLink().id(d => d.id)
-                .distance(150)
-                .strength(0.7))
+                .distance(d => {
+                    // Adjust link distance based on node types
+                    const sourceType = d.source.type;
+                    const targetType = d.target.type;
+                    if (sourceType === 'Molecule' && targetType === 'Target') {
+                        return 100;  // Longer distance for molecule-target interactions
+                    }
+                    if (sourceType === 'Target' && targetType === 'Target') {
+                        return 75;  // Medium distance for target-target relationships
+                    }
+                    return 50;  // Default distance for other relationships
+                })
+                .strength(0.5))  // Reduced link strength for more flexibility
             .force('charge', d3.forceManyBody()
-                .strength(-2000)
-                .distanceMax(1000))
+                .strength(d => {
+                    // Adjust repulsion force based on node type
+                    switch(d.type) {
+                        case 'Molecule':
+                            return -1000;  // Strong repulsion for molecules
+                        case 'Target':
+                            return -800;   // Medium repulsion for targets
+                        default:
+                            return -500;   // Default repulsion
+                    }
+                })
+                .distanceMax(500))
             .force('collide', d3.forceCollide()
-                .radius(60)
-                .strength(0.7))
-            .force('center', d3.forceCenter(0, 0).strength(0.05))  // Gentle central force
-            .force('x', d3.forceX(0).strength(0.02))  // Very gentle x-centering
-            .force('y', d3.forceY(0).strength(0.02))  // Very gentle y-centering
-            .alphaDecay(0.01)  // Slower decay for more movement
-            .velocityDecay(0.3);  // Less friction
+                .radius(d => this.getNodeSize(d.type) * 1.5)  // Increased padding around nodes
+                .strength(0.8))
+            .force('center', d3.forceCenter(this.width / 2, this.height / 2).strength(0.1))
+            .force('x', d3.forceX(this.width / 2).strength(0.05))
+            .force('y', d3.forceY(this.height / 2).strength(0.05))
+            .alphaDecay(0.02)  // Slightly faster decay for quicker stabilization
+            .velocityDecay(0.4);  // More friction to prevent excessive movement
 
         // Bind methods
         this.handleNodeClick = this.handleNodeClick.bind(this);
@@ -97,7 +118,8 @@ class GraphVisualization {
             // Initialize position if not set
             x: node.x || Math.random() * this.width,
             y: node.y || Math.random() * this.height,
-            width: node.width || 30  // Ensure nodes have a default width
+            // Set node size based on type
+            width: this.getNodeSize(node.type)
         }));
 
         const links = data.links.map(link => {
@@ -161,7 +183,8 @@ class GraphVisualization {
             .attr('class', 'link')
             .attr('stroke', d => this.getEdgeColor(d))
             .attr('stroke-opacity', 0.8)
-            .attr('stroke-width', 2)
+            .attr('stroke-width', d => this.getEdgeWidth(d))
+            .attr('stroke-dasharray', d => this.getEdgeDashArray(d))
             .attr('marker-end', d => {
                 const type = d.activity_type ? d.activity_type.toLowerCase() : 'default';
                 return `url(#arrow-${type})`;
@@ -173,6 +196,8 @@ class GraphVisualization {
                 let tooltip = d.type || 'Relationship';
                 if (d.activity_type) tooltip += `\nActivity: ${d.activity_type}`;
                 if (d.activity_value) tooltip += `\nValue: ${d.activity_value}`;
+                if (d.activity_unit) tooltip += ` ${d.activity_unit}`;
+                if (d.confidence_score) tooltip += `\nConfidence: ${d.confidence_score}`;
                 return tooltip;
             });
 
@@ -297,34 +322,77 @@ class GraphVisualization {
     }
 
     getNodeColor(type) {
-        const colors = {
-            'Molecule': '#10B981',  // Tailwind green-500
-            'Organism': '#3B82F6',  // Tailwind blue-500
-            'Target': '#EF4444',    // Tailwind red-500
-            'default': '#94A3B8'    // Tailwind gray-400
-        };
-        return colors[type] || colors.default;
+        switch(type) {
+            case 'Molecule':
+                return '#10B981';  // Green
+            case 'Organism':
+                return '#3B82F6';  // Blue
+            case 'Target':
+                return '#EF4444';  // Red
+            default:
+                return '#9CA3AF';  // Default gray
+        }
     }
 
     getEdgeColor(relationship) {
-        const type = relationship && relationship.activity_type ? 
-            relationship.activity_type.toLowerCase() : 
-            (relationship && relationship.type ? relationship.type.toLowerCase() : 'default');
-        
-        const colors = {
-            'agonist': '#22C55E',
-            'antagonist': '#DC2626',
-            'partial_agonist': '#84CC16',
-            'inverse_agonist': '#EA580C',
-            'inhibitor': '#7C3AED',  // Violet color for inhibitors
-            'activator': '#2563EB',  // Blue color for activators
-            'interacts_with': '#6366F1',
-            'contains': '#8B5CF6',
-            'found_in': '#EC4899',
-            'default': '#94A3B8'
-        };
+        // First check activity type
+        if (relationship.activity_type) {
+            switch(relationship.activity_type.toLowerCase()) {
+                case 'agonist':
+                    return '#22C55E';  // Green
+                case 'antagonist':
+                    return '#DC2626';  // Red
+                case 'inhibitor':
+                    return '#7C3AED';  // Violet
+                case 'activator':
+                    return '#2563EB';  // Blue
+                case 'substrate':
+                    return '#F59E0B';  // Orange
+                case 'unknown':
+                    return '#94A3B8';  // Gray
+                default:
+                    return '#94A3B8';  // Gray
+            }
+        }
+        return '#94A3B8';  // Default gray
+    }
 
-        return colors[type] || colors.default;
+    getEdgeWidth(relationship) {
+        // Base width on relationship type and confidence score
+        let baseWidth = 2;
+        
+        // Adjust width based on relationship type
+        switch(relationship.type) {
+            case 'HAS_STRUCTURE':
+            case 'ENCODED_BY':
+                baseWidth = 3;
+                break;
+            case 'INTERACTS_WITH':
+                baseWidth = relationship.activity_type ? 2.5 : 2;
+                break;
+            case 'ASSOCIATED_WITH':
+                baseWidth = 1.5;
+                break;
+        }
+
+        // Adjust width based on confidence score if available
+        if (relationship.confidence_score) {
+            baseWidth *= (0.5 + relationship.confidence_score * 0.5);  // Scale between 50% and 100% of base width
+        }
+
+        return baseWidth;
+    }
+
+    getEdgeDashArray(relationship) {
+        // Use dashed lines for certain relationship types
+        switch(relationship.type) {
+            case 'ASSOCIATED_WITH':
+                return '5,5';  // Dashed line
+            case 'HAS_STRUCTURE':
+                return '1,0';  // Solid line
+            default:
+                return relationship.activity_type === 'unknown' ? '3,3' : '1,0';  // Dashed for unknown activity
+        }
     }
 
     handleZoom(event) {
@@ -410,46 +478,85 @@ class GraphVisualization {
 
             // Add node type legend items
             const nodeTypes = [
-                { label: 'Molecules', color: '#10B981' },
-                { label: 'Organisms', color: '#3B82F6' },
-                { label: 'Targets', color: '#EF4444' }
+                { label: 'Molecules', color: '#10B981', type: 'Molecule' },
+                { label: 'Organisms', color: '#3B82F6', type: 'Organism' },
+                { label: 'Targets', color: '#EF4444', type: 'Target' }
             ];
 
-            nodeTypes.forEach(type => {
-                legend.append('div')
-                    .attr('class', 'legend-item')
-                    .html(`
-                        <span class="legend-color" style="background-color: ${type.color};"></span>
-                        <span class="legend-label">${type.label}</span>
-                    `);
-            });
+            // Only show node types that exist in the data
+            const existingTypes = new Set(this.nodes.map(n => n.type));
+            nodeTypes
+                .filter(type => existingTypes.has(type.type))
+                .forEach(type => {
+                    legend.append('div')
+                        .attr('class', 'legend-item')
+                        .html(`
+                            <span class="legend-color" style="background-color: ${type.color};"></span>
+                            <span class="legend-label">${type.label}</span>
+                        `);
+                });
 
             // Add separator
             legend.append('hr')
                 .attr('class', 'my-2 border-gray-200');
 
-            // Add relationship type legend items
-            const relationshipTypes = [
-                { label: 'Agonist', color: '#22C55E' },
-                { label: 'Antagonist', color: '#DC2626' },
-                { label: 'Partial Agonist', color: '#84CC16' },
-                { label: 'Inverse Agonist', color: '#EA580C' },
-                { label: 'Inhibitor', color: '#7C3AED' },
-                { label: 'Activator', color: '#2563EB' },
-                { label: 'Unknown', color: '#94A3B8' }
-            ];
+            // Define allowed relationship types and their colors
+            const allowedRelationships = {
+                'agonist': '#22C55E',
+                'antagonist': '#DC2626',
+                'inhibitor': '#7C3AED',
+                'activator': '#2563EB',
+                'substrate': '#F59E0B',
+                'unknown': '#94A3B8'
+            };
 
-            relationshipTypes.forEach(type => {
-                legend.append('div')
-                    .attr('class', 'legend-item')
-                    .html(`
-                        <div class="flex items-center">
-                            <div class="w-8 h-0.5" style="background-color: ${type.color};"></div>
-                            <div class="legend-color" style="background-color: ${type.color}; transform: rotate(45deg); width: 6px; height: 6px; margin-left: -3px;"></div>
-                        </div>
-                        <span class="legend-label ml-2">${type.label}</span>
-                    `);
+            // Get unique relationship types from the data
+            const relationshipTypes = new Set();
+            this.links.forEach(link => {
+                if (link.activity_type && allowedRelationships[link.activity_type.toLowerCase()]) {
+                    relationshipTypes.add(link.activity_type.toLowerCase());
+                }
             });
+
+            // Add relationship type legend items
+            Array.from(relationshipTypes)
+                .sort()
+                .forEach(type => {
+                    const color = allowedRelationships[type];
+                    const label = type.charAt(0).toUpperCase() + type.slice(1);
+                    legend.append('div')
+                        .attr('class', 'legend-item')
+                        .html(`
+                            <div class="flex items-center">
+                                <div class="w-8 h-0.5" style="background-color: ${color};"></div>
+                                <div class="legend-color" style="background-color: ${color}; transform: rotate(45deg); width: 6px; height: 6px; margin-left: -3px;"></div>
+                            </div>
+                            <span class="legend-label ml-2">${label}</span>
+                        `);
+                });
+        }
+    }
+
+    getNodeSize(type) {
+        switch(type) {
+            case 'Molecule':
+                return 30;  // Slightly larger size for molecules
+            case 'Target':
+                return 25;  // Medium size for targets
+            case 'Disease':
+                return 35;  // Medium-large size for diseases
+            case 'Gene':
+                return 30;  // Medium size for genes
+            case 'Protein':
+                return 30;  // Medium size for proteins
+            case 'Structure':
+                return 25;  // Medium-small size for structures
+            case 'Source':
+                return 20;  // Small size for sources
+            case 'Synonym':
+                return 15;  // Smallest size for synonyms
+            default:
+                return 20;  // Default size
         }
     }
 }

@@ -8,8 +8,8 @@
     .header-stats {
         display: flex;
         gap: 20px;
-        margin: 0 auto;  /* Center the stats */
-        padding: 0 2rem;  /* Add padding on both sides */
+        margin: 0 auto;
+        padding: 0 2rem;
         color: rgba(255, 255, 255, 0.75);
     }
 
@@ -17,7 +17,7 @@
         display: flex;
         align-items: baseline;
         gap: 4px;
-        white-space: nowrap;  /* Prevent wrapping */
+        white-space: nowrap;
     }
 
     .stat-number {
@@ -30,19 +30,10 @@
         opacity: 0.9;
     }
 
-    /* Ensure the navbar items are properly spaced */
-    .navbar-nav {
-        margin-right: 2rem;  /* Add space after nav links */
-    }
-
-    /* Adjust search form spacing */
-    .d-flex.ms-auto {
-        margin-left: 2rem !important;  /* Add space before search */
-    }
-
-    /* Ensure the page takes up exactly the viewport height */
+    /* Ensure the page takes up exactly the viewport height and width */
     html, body {
         height: 100vh;
+        width: 100vw;
         margin: 0;
         padding: 0;
         overflow: hidden;
@@ -53,17 +44,11 @@
         flex-direction: column;
     }
 
-    /* Header styles */
-    .navbar {
-        height: 56px;
-        flex-shrink: 0;
-        margin: 0;
-        padding: 0 1rem;
-    }
-
-    /* Main content area */
-    main.container-fluid {
+    /* Main content area - remove default Bootstrap container padding */
+    .container {
         flex: 1;
+        width: 100vw !important;
+        max-width: none !important;
         padding: 0 !important;
         margin: 0 !important;
         min-height: 0;
@@ -72,59 +57,27 @@
         overflow: hidden;
     }
 
-    /* Remove any Bootstrap padding */
-    .py-4 {
-        padding-top: 0 !important;
-        padding-bottom: 0 !important;
+    /* Stats grid container */
+    .stats-grid {
+        padding: 1rem;
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
     }
 
     /* Graph container styles */
     #graph-container {
         flex: 1;
         width: 100%;
+        height: calc(100vh - 60px - 50px); /* Subtract header and footer heights */
         position: relative;
         background: white;
         overflow: hidden;
         margin: 0;
-    }
-
-    /* Footer styles */
-    .footer {
-        height: 56px;
-        flex-shrink: 0;
-        margin: 0;
-        padding: 0 1rem;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .footer .container {
-        margin: 0;
         padding: 0;
-        height: 100%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
     }
 
-    .footer p {
-        margin: 0;
-        padding: 0;
-        color: rgba(255, 255, 255, 0.75);
-    }
-
-    .footer a {
-        color: rgba(255, 255, 255, 0.75);
-        text-decoration: none;
-    }
-
-    .footer a:hover {
-        color: white;
-        text-decoration: underline;
-    }
-
-    /* Updated Legend styles */
+    /* Graph legend styles */
     .graph-legend {
         position: absolute;
         bottom: 1rem;
@@ -162,52 +115,6 @@
         flex: 1;
     }
 
-    /* Relationship legend styles */
-    .legend-relationship {
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-
-    .legend-line {
-        height: 2px;
-        width: 24px;
-        display: inline-block;
-    }
-
-    .legend-arrow {
-        width: 6px;
-        height: 6px;
-        transform: rotate(45deg);
-        margin-left: -3px;
-    }
-
-    /* Legend separator */
-    .legend-separator {
-        margin: 0.75rem 0;
-        border: 0;
-        border-top: 1px solid #e2e8f0;
-    }
-
-    /* Updated Sidebar styles */
-    #sidebar {
-        position: fixed;
-        top: 56px;
-        right: 0;
-        height: calc(100vh - 112px);
-        width: 24rem;
-        background: white;
-        box-shadow: -4px 0 6px -1px rgba(0, 0, 0, 0.1);
-        overflow-y: auto;
-        z-index: 50;
-        transform: translateX(100%);
-        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    }
-
-    #sidebar.visible {
-        transform: translateX(0);
-    }
-
     /* Loading spinner */
     .loading-spinner {
         position: fixed;
@@ -240,10 +147,10 @@
 </div>
 {% endblock %}
 
-{% block content %}
+{% block main_content %}
 <!-- Graph Visualization -->
 <div id="graph-container">
-    <!-- Updated Legend -->
+    <!-- Graph Legend -->
     <div class="graph-legend">
         <div class="legend-item">
             <span class="legend-color" style="background-color: #10B981;"></span>
@@ -258,105 +165,105 @@
             <span class="legend-label">Targets</span>
         </div>
         <div class="legend-item">
+            <span class="legend-color" style="background-color: #8B5CF6;"></span>
+            <span class="legend-label">Diseases</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-color" style="background-color: #F59E0B;"></span>
+            <span class="legend-label">Genes</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-color" style="background-color: #EC4899;"></span>
+            <span class="legend-label">Proteins</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-color" style="background-color: #6366F1;"></span>
+            <span class="legend-label">Structures</span>
+        </div>
+        <div class="legend-item">
+            <span class="legend-color" style="background-color: #14B8A6;"></span>
+            <span class="legend-label">Sources</span>
+        </div>
+        <div class="legend-item">
             <span class="legend-color" style="background-color: #94A3B8;"></span>
-            <span class="legend-label">Relationships</span>
+            <span class="legend-label">Synonyms</span>
         </div>
     </div>
 </div>
 
-<!-- Sidebar for Node Details -->
-<div id="sidebar">
-    <!-- Node details will be shown here -->
-</div>
-
 <!-- Loading Spinner -->
-<div id="loadingSpinner" class="loading-spinner hidden">
-    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+<div class="loading-spinner hidden">
+    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
 </div>
 {% endblock %}
 
-{% block scripts %}
-<!-- Load D3.js first -->
+{% block extra_scripts %}
 <script src="https://d3js.org/d3.v7.min.js"></script>
-
-<!-- Load WebCola with fallbacks -->
+<script src="{{ url_for('static', filename='js/graph.js') }}"></script>
 <script>
-    // Function to load script with promise
-    function loadScript(url) {
-        return new Promise((resolve, reject) => {
-            const script = document.createElement('script');
-            script.src = url;
-            script.onload = () => resolve();
-            script.onerror = () => reject();
-            document.head.appendChild(script);
-        });
-    }
+// Initialize graph visualization only once
+let graph;
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if graph is already initialized
+    if (!graph) {
+        // Initialize graph visualization
+        graph = new GraphVisualization('graph-container');
 
-    // Try loading WebCola from different CDNs
-    async function initializeWebCola() {
-        const cdnUrls = [
-            'https://cdnjs.cloudflare.com/ajax/libs/webcola/3.4.0/cola.min.js',
-            'https://unpkg.com/webcola@3.4.0/WebCola/cola.min.js',
-            'https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js'
-        ];
+        // Show loading spinner
+        const loadingSpinner = document.querySelector('.loading-spinner');
+        loadingSpinner.classList.remove('hidden');
 
-        for (const url of cdnUrls) {
-            try {
-                await loadScript(url);
-                if (typeof cola !== 'undefined') {
-                    console.log('WebCola loaded successfully');
-                    return true;
-                }
-            } catch (error) {
-                console.warn(`Failed to load WebCola from ${url}`);
-            }
-        }
-        
-        console.error('Failed to load WebCola from all CDNs');
-        alert('Failed to load graph visualization library. Some features may not work correctly.');
-        return false;
-    }
+        // Load initial data
+        fetch('/api/graph/overview')
+            .then(response => response.json())
+            .then(data => {
+                // Update stats
+                document.getElementById('moleculeCount').textContent = data.stats.molecules || 0;
+                document.getElementById('organismCount').textContent = data.stats.organisms || 0;
+                document.getElementById('targetCount').textContent = data.stats.targets || 0;
 
-    // Initialize all required scripts in sequence
-    async function initializeApplication() {
-        try {
-            // First load WebCola
-            await initializeWebCola();
+                // Update graph visualization
+                graph.updateData(data);
 
-            // Then load our application scripts in sequence
-            await loadScript("{{ url_for('static', filename='js/api.js') }}");
-            console.log('API client script loaded');
-
-            // Wait for API client to initialize
-            await new Promise(resolve => {
-                function checkAPI() {
-                    if (window.api && window.api.getGraphData) {
-                        console.log('API client fully initialized');
-                        resolve();
-                    } else {
-                        setTimeout(checkAPI, 100);
-                    }
-                }
-                checkAPI();
+                // Hide loading spinner
+                loadingSpinner.classList.add('hidden');
+            })
+            .catch(error => {
+                console.error('Error loading graph data:', error);
+                loadingSpinner.classList.add('hidden');
             });
 
-            await loadScript("{{ url_for('static', filename='js/graph.js') }}");
-            console.log('Graph visualization script loaded');
+        // Handle search input
+        const searchInput = document.querySelector('#globalSearchInput');
+        if (searchInput) {
+            searchInput.addEventListener('input', function(e) {
+                const query = e.target.value.trim();
+                
+                // Show loading spinner
+                loadingSpinner.classList.remove('hidden');
 
-            await loadScript("{{ url_for('static', filename='js/app.js') }}");
-            console.log('Application script loaded');
+                // Fetch search results
+                fetch(`/api/graph?q=${encodeURIComponent(query)}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Update graph visualization
+                        graph.updateData(data);
 
-        } catch (error) {
-            console.error('Error initializing application:', error);
-            alert('Failed to initialize application. Please refresh the page and try again.');
+                        // Update stats
+                        document.getElementById('moleculeCount').textContent = data.stats.molecules || 0;
+                        document.getElementById('organismCount').textContent = data.stats.organisms || 0;
+                        document.getElementById('targetCount').textContent = data.stats.targets || 0;
+
+                        // Hide loading spinner
+                        loadingSpinner.classList.add('hidden');
+                    })
+                    .catch(error => {
+                        console.error('Error searching graph:', error);
+                        loadingSpinner.classList.add('hidden');
+                    });
+            });
         }
     }
-
-    // Start initialization when DOM is loaded
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initializeApplication);
-    } else {
-        initializeApplication();
-    }
+});
 </script>
 {% endblock %} 
