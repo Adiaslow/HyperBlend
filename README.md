@@ -65,7 +65,7 @@ cp .env.example .env
 1. Start the Flask development server:
 
 ```bash
-flask run
+cd /Users/Adam/HyperBlend && python -m hyperblend.app.web.app
 ```
 
 2. Open your browser and navigate to `http://localhost:5000`

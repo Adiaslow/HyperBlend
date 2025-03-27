@@ -2,10 +2,10 @@
 
 import logging
 from typing import List, Optional, Dict, Any
-from py2neo import Graph, NodeMatcher
-from hyperblend.app.web.core.exceptions import ResourceNotFoundError
-from hyperblend.db.neo4j import db
+from py2neo import Graph
 
+from hyperblend.repository.organism_repository import OrganismRepository
+from hyperblend.repository.molecule_repository import MoleculeRepository
 from .base_service import BaseService
 
 logger = logging.getLogger(__name__)
@@ -14,14 +14,23 @@ logger = logging.getLogger(__name__)
 class OrganismService(BaseService):
     """Service for handling organism-related operations."""
 
-    def __init__(self, graph: Graph):
+    def __init__(
+        self,
+        graph: Optional[Graph] = None,
+        organism_repository: Optional[OrganismRepository] = None,
+        molecule_repository: Optional[MoleculeRepository] = None,
+    ):
         """Initialize the organism service.
-        
+
         Args:
             graph: Neo4j graph database connection
+            organism_repository: Repository for organism operations
+            molecule_repository: Repository for molecule operations
         """
         super().__init__(graph)
-        self.matcher = NodeMatcher(graph)
+        self.logger = logging.getLogger(__name__)
+        self.organism_repository = organism_repository or OrganismRepository(graph)
+        self.molecule_repository = molecule_repository or MoleculeRepository(graph)
 
     def get_organism(self, organism_id: str) -> Optional[Dict[str, Any]]:
         """
@@ -34,29 +43,26 @@ class OrganismService(BaseService):
             Dictionary containing organism details and related molecules
         """
         try:
-            cypher_query = """
-            MATCH (o:Organism)
-            WHERE elementId(o) = $organism_id
-            OPTIONAL MATCH (o)<-[r]-(m:Molecule)
-            WITH o, collect({
-                id: toString(elementId(m)),
-                name: m.name,
-                smiles: m.smiles,
-                relationship: type(r)
-            }) as molecules
-            RETURN {
-                id: toString(elementId(o)),
-                name: o.name,
-                description: o.description,
-                taxonomy: o.taxonomy,
-                molecules: molecules
-            } as organism
-            """
-            result = self.graph.run(cypher_query, organism_id=int(organism_id)).data()
-            return result[0]['organism'] if result else None
+            organism = self.organism_repository.find_organism_by_id(organism_id)
+            if not organism:
+                return None
+
+            # Get associated molecules
+            molecules = self.organism_repository.get_organism_molecules(organism_id)
+
+            # Format the result
+            result = {
+                "id": organism.get("id"),
+                "name": organism.get("name"),
+                "description": organism.get("description"),
+                "taxonomy": organism.get("taxonomy"),
+                "molecules": molecules,
+            }
+
+            return result
         except Exception as e:
-            logger.error(f"Error getting organism {organism_id}: {str(e)}")
-            raise
+            self.logger.error(f"Error getting organism {organism_id}: {str(e)}")
+            return None
 
     def get_all_organisms(self) -> List[Dict[str, Any]]:
         """
@@ -66,20 +72,19 @@ class OrganismService(BaseService):
             List of dictionaries containing organism details
         """
         try:
-            cypher_query = """
-            MATCH (o:Organism)
-            RETURN {
-                id: toString(elementId(o)),
-                name: o.name,
-                description: o.description,
-                taxonomy: o.taxonomy
-            } as organism
-            """
-            result = self.graph.run(cypher_query).data()
-            return [r['organism'] for r in result]
+            organisms = self.organism_repository.get_all_organisms()
+            return [
+                {
+                    "id": org.get("id"),
+                    "name": org.get("name"),
+                    "description": org.get("description"),
+                    "taxonomy": org.get("taxonomy"),
+                }
+                for org in organisms
+            ]
         except Exception as e:
-            logger.error(f"Error getting all organisms: {str(e)}")
-            raise
+            self.logger.error(f"Error getting all organisms: {str(e)}")
+            return []
 
     def search_organisms(self, query: str) -> List[Dict[str, Any]]:
         """
@@ -92,23 +97,19 @@ class OrganismService(BaseService):
             List of dictionaries containing matching organism details
         """
         try:
-            cypher_query = """
-            MATCH (o:Organism)
-            WHERE o.name =~ $query 
-               OR o.description =~ $query 
-               OR o.taxonomy =~ $query
-            RETURN {
-                id: toString(elementId(o)),
-                name: o.name,
-                description: o.description,
-                taxonomy: o.taxonomy
-            } as organism
-            """
-            result = self.graph.run(cypher_query, query=f"(?i).*{query}.*").data()
-            return [r['organism'] for r in result]
+            organisms = self.organism_repository.search_organisms(query)
+            return [
+                {
+                    "id": org.get("id"),
+                    "name": org.get("name"),
+                    "description": org.get("description"),
+                    "taxonomy": org.get("taxonomy"),
+                }
+                for org in organisms
+            ]
         except Exception as e:
-            logger.error(f"Error searching organisms with query {query}: {str(e)}")
-            raise
+            self.logger.error(f"Error searching organisms with query {query}: {str(e)}")
+            return []
 
     def find_by_name(self, name: str, exact: bool = False) -> List[Dict[str, Any]]:
         """
@@ -121,29 +122,11 @@ class OrganismService(BaseService):
         Returns:
             List[Dict[str, Any]]: List of organisms found
         """
-        if exact:
-            query = """
-            MATCH (o:Organism {name: $name})
-            OPTIONAL MATCH (o)-[:FROM_SOURCE]->(src:Source)
-            OPTIONAL MATCH (o)-[:PRODUCES]->(m:Molecule)
-            RETURN o, collect(DISTINCT src.name) as sources, count(DISTINCT m) as molecule_count
-            """
-        else:
-            query = """
-            MATCH (o:Organism)
-            WHERE o.name =~ $pattern
-            OPTIONAL MATCH (o)-[:FROM_SOURCE]->(src:Source)
-            OPTIONAL MATCH (o)-[:PRODUCES]->(m:Molecule)
-            RETURN o, collect(DISTINCT src.name) as sources, count(DISTINCT m) as molecule_count
-            """
-
         try:
-            pattern = f"(?i).*{name}.*"  # Case-insensitive pattern
-            results = self.graph.run(
-                query, parameters={"name": name, "pattern": pattern}
-            ).data()
-
-            return [self._format_organism_result(result) for result in results]
+            organisms = self.organism_repository.find_organisms_by_name(
+                name, exact_match=exact
+            )
+            return organisms
         except Exception as e:
             self.logger.error(f"Error finding organisms by name: {str(e)}")
             return []
@@ -158,16 +141,9 @@ class OrganismService(BaseService):
         Returns:
             List[Dict[str, Any]]: List of organisms found
         """
-        query = """
-        MATCH (o:Organism {rank: $rank})
-        OPTIONAL MATCH (o)-[:FROM_SOURCE]->(src:Source)
-        OPTIONAL MATCH (o)-[:PRODUCES]->(m:Molecule)
-        RETURN o, collect(DISTINCT src.name) as sources, count(DISTINCT m) as molecule_count
-        """
-
         try:
-            results = self.graph.run(query, parameters={"rank": rank}).data()
-            return [self._format_organism_result(result) for result in results]
+            organisms = self.organism_repository.find_organisms_by_rank(rank)
+            return organisms
         except Exception as e:
             self.logger.error(f"Error finding organisms by rank: {str(e)}")
             return []
@@ -182,260 +158,133 @@ class OrganismService(BaseService):
         Returns:
             List[Dict[str, Any]]: List of organisms found
         """
-        query = """
-        MATCH (o:Organism)-[:FROM_SOURCE]->(src:Source {name: $source})
-        OPTIONAL MATCH (o)-[:FROM_SOURCE]->(other_src:Source)
-        OPTIONAL MATCH (o)-[:PRODUCES]->(m:Molecule)
-        RETURN o, collect(DISTINCT other_src.name) as sources, count(DISTINCT m) as molecule_count
-        """
-
         try:
-            results = self.graph.run(query, parameters={"source": source}).data()
-            return [self._format_organism_result(result) for result in results]
+            organisms = self.organism_repository.find_organisms_by_source(source)
+            return organisms
         except Exception as e:
             self.logger.error(f"Error finding organisms by source: {str(e)}")
             return []
 
-    def get_organism_molecules(self, name: str) -> List[Dict[str, Any]]:
+    def get_organism_molecules(self, organism_id: str) -> List[Dict[str, Any]]:
         """
-        Get molecules produced by an organism.
+        Get molecules associated with an organism.
 
         Args:
-            name: Organism name
+            organism_id: ID of the organism
 
         Returns:
-            List[Dict[str, Any]]: List of molecules found
+            List[Dict[str, Any]]: List of molecules
         """
-        query = """
-        MATCH (o:Organism {name: $name})-[:PRODUCES]->(m:Molecule)
-        OPTIONAL MATCH (m)-[:HAS_SYNONYM]->(s:Synonym)
-        OPTIONAL MATCH (m)-[:FROM_SOURCE]->(src:Source)
-        RETURN m, collect(DISTINCT s.name) as synonyms, collect(DISTINCT src.name) as sources
-        """
-
         try:
-            results = self.graph.run(query, parameters={"name": name}).data()
-            return [self._format_molecule_result(result) for result in results]
+            molecules = self.organism_repository.get_organism_molecules(organism_id)
+            return molecules
         except Exception as e:
             self.logger.error(f"Error getting organism molecules: {str(e)}")
             return []
 
-    def _ensure_source_exists(self, source: str) -> bool:
+    def create_organism(
+        self, properties: Dict[str, Any], source: str = None
+    ) -> Optional[Dict[str, Any]]:
         """
-        Ensure a source node exists in the database.
+        Create a new organism.
 
         Args:
-            source: Name of the source
+            properties: Dictionary of organism properties
+            source: Optional source of the organism data
 
         Returns:
-            bool: True if source exists or was created
+            Optional[Dict[str, Any]]: Created organism or None if failed
         """
-        query = """
-        MERGE (s:Source {name: $source})
-        RETURN s
-        """
-
         try:
-            result = self.graph.run(query, parameters={"source": source}).data()
-            return len(result) > 0
+            organism = self.organism_repository.create_organism(properties, source)
+            return organism
         except Exception as e:
-            self.logger.error(f"Error ensuring source exists: {str(e)}")
-            return False
+            self.logger.error(f"Error creating organism: {str(e)}")
+            return None
 
-    def _ensure_molecule_exists(
-        self, molecule_id: str, source: str, properties: Optional[Dict[str, Any]] = None
-    ) -> bool:
+    def update_organism(
+        self, organism_id: str, properties: Dict[str, Any], source: str = None
+    ) -> Optional[Dict[str, Any]]:
         """
-        Ensure a molecule node exists in the database.
+        Update an existing organism.
 
         Args:
-            molecule_id: ID of the molecule
-            source: Source of the molecule
-            properties: Optional dictionary of molecule properties
+            organism_id: ID of the organism to update
+            properties: Updated properties
+            source: Optional source of the data
 
         Returns:
-            bool: True if molecule exists or was created
+            Optional[Dict[str, Any]]: Updated organism or None if failed
         """
-        # Start with required properties
-        molecule_props = {"id": molecule_id, "source": source}
-
-        # Add optional properties if provided
-        if properties:
-            for key in [
-                "name",
-                "formula",
-                "molecular_weight",
-                "smiles",
-                "inchi",
-                "inchikey",
-                "pubchem_cid",
-                "chembl_id",
-                "logp",
-                "polar_surface_area",
-            ]:
-                if key in properties:
-                    molecule_props[key] = properties[key]
-
-        query = """
-        MERGE (m:Molecule {id: $molecule_id})
-        SET m += $properties
-        WITH m
-        MATCH (s:Source {name: $source})
-        MERGE (m)-[:FROM_SOURCE]->(s)
-        RETURN m
-        """
-
         try:
-            result = self.graph.run(
-                query,
-                parameters={
-                    "molecule_id": molecule_id,
-                    "properties": molecule_props,
-                    "source": source,
-                },
-            ).data()
-            return len(result) > 0
+            organism = self.organism_repository.update_organism(
+                organism_id, properties, source
+            )
+            return organism
         except Exception as e:
-            self.logger.error(f"Error ensuring molecule exists: {str(e)}")
+            self.logger.error(f"Error updating organism: {str(e)}")
+            return None
+
+    def delete_organism(self, organism_id: str) -> bool:
+        """
+        Delete an organism.
+
+        Args:
+            organism_id: ID of the organism to delete
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            return self.organism_repository.delete_organism(organism_id)
+        except Exception as e:
+            self.logger.error(f"Error deleting organism: {str(e)}")
             return False
 
     def link_molecule_to_organism(
-        self,
-        organism_name: str,
-        molecule_id: str,
-        source: str,
-        molecule_properties: Optional[Dict[str, Any]] = None,
+        self, organism_id: str, molecule_id: str, relationship_type: str = "PRODUCES"
     ) -> bool:
         """
-        Create a PRODUCES relationship between an organism and a molecule.
+        Link a molecule to an organism.
 
         Args:
-            organism_name: Name of the organism
+            organism_id: ID of the organism
             molecule_id: ID of the molecule
-            source: Source of the relationship (e.g., 'COCONUT')
-            molecule_properties: Optional dictionary of molecule properties
+            relationship_type: Type of relationship
 
         Returns:
-            bool: True if relationship was created successfully
+            bool: True if successful, False otherwise
         """
-        # Ensure source and molecule exist
-        if not self._ensure_source_exists(source):
-            return False
-        if not self._ensure_molecule_exists(molecule_id, source, molecule_properties):
-            return False
-
-        query = """
-        MATCH (o:Organism {name: $organism_name})
-        MATCH (m:Molecule {id: $molecule_id})
-        MERGE (o)-[:PRODUCES {source: $source}]->(m)
-        RETURN o, m
-        """
-
         try:
-            result = self.graph.run(
-                query,
-                parameters={
-                    "organism_name": organism_name,
-                    "molecule_id": molecule_id,
-                    "source": source,
-                },
-            ).data()
-            success = len(result) > 0
-            if success:
-                self.logger.info(
-                    f"Linked molecule {molecule_id} to organism {organism_name}"
-                )
-            else:
-                self.logger.warning(
-                    f"Failed to link molecule {molecule_id} to organism {organism_name}"
-                )
-            return success
+            return self.organism_repository.link_molecule_to_organism(
+                organism_id=organism_id,
+                molecule_id=molecule_id,
+                relationship_type=relationship_type,
+            )
         except Exception as e:
             self.logger.error(f"Error linking molecule to organism: {str(e)}")
             return False
 
-    def link_molecules_to_organism(
-        self,
-        organism_name: str,
-        molecule_ids: List[str],
-        source: str,
-        molecule_properties: Optional[Dict[str, Dict[str, Any]]] = None,
-    ) -> int:
-        """
-        Create PRODUCES relationships between an organism and multiple molecules.
-
-        Args:
-            organism_name: Name of the organism
-            molecule_ids: List of molecule IDs
-            source: Source of the relationships (e.g., 'COCONUT')
-            molecule_properties: Optional dictionary mapping molecule IDs to their properties
-
-        Returns:
-            int: Number of relationships created successfully
-        """
-        success_count = 0
-        for molecule_id in molecule_ids:
-            props = (
-                molecule_properties.get(molecule_id) if molecule_properties else None
-            )
-            if self.link_molecule_to_organism(
-                organism_name, molecule_id, source, props
-            ):
-                success_count += 1
-
-        self.logger.info(
-            f"Linked {success_count}/{len(molecule_ids)} molecules to {organism_name}"
-        )
-        return success_count
-
     def _format_organism_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Format organism query result.
+        Format organism result for API response.
 
         Args:
-            result: Raw query result
+            result: Raw result from the database
 
         Returns:
             Dict[str, Any]: Formatted organism data
         """
-        if not result:
+        if not result or "o" not in result:
             return {}
 
-        organism = result["o"]
-        return {
-            "name": organism.get("name", ""),
-            "rank": organism.get("rank", ""),
-            "iri": organism.get("iri", ""),
-            "molecule_count": result.get("molecule_count", 0),
-            "sources": result.get("sources", []),
-        }
+        organism = dict(result["o"])
+        organism.update(
+            {
+                "id": organism.get("id"),
+                "sources": result.get("sources", []),
+                "molecule_count": result.get("molecule_count", 0),
+            }
+        )
 
-    def _format_molecule_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Format molecule query result.
-
-        Args:
-            result: Raw query result
-
-        Returns:
-            Dict[str, Any]: Formatted molecule data
-        """
-        if not result:
-            return {}
-
-        molecule = result["m"]
-        return {
-            "id": molecule.get("id", ""),
-            "name": molecule.get("name", ""),
-            "formula": molecule.get("formula", ""),
-            "molecular_weight": molecule.get("molecular_weight", 0.0),
-            "smiles": molecule.get("smiles", ""),
-            "inchi": molecule.get("inchi", ""),
-            "inchikey": molecule.get("inchikey", ""),
-            "pubchem_cid": molecule.get("pubchem_cid"),
-            "chembl_id": molecule.get("chembl_id"),
-            "logp": molecule.get("logp", 0.0),
-            "polar_surface_area": molecule.get("polar_surface_area", 0.0),
-            "synonyms": result.get("synonyms", []),
-            "sources": result.get("sources", []),
-        }
+        return organism

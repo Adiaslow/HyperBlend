@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 
-{% block title %}HyperBlend{% endblock %}
+{% block title %} - Home{% endblock %}
 
-{% block extra_css %}
+{% block page_css %}
 <style>
     /* Only keep styles that can't be handled by Tailwind */
     .header-stats {
@@ -67,14 +67,14 @@
 
     /* Graph container styles */
     #graph-container {
-        flex: 1;
         width: 100%;
-        height: calc(100vh - 60px - 50px); /* Subtract header and footer heights */
+        height: calc(100vh - 120px); /* Subtract header and footer heights only */
         position: relative;
         background: white;
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         overflow: hidden;
         margin: 0;
-        padding: 0;
     }
 
     /* Graph legend styles */
@@ -127,28 +127,48 @@
         border-radius: 0.5rem;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
     }
+
+    .animate-spin {
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        from {
+            transform: rotate(0deg);
+        }
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .h-8 {
+        height: 2rem;
+    }
+
+    .w-8 {
+        width: 2rem;
+    }
+
+    .border-b-2 {
+        border-bottom-width: 2px;
+    }
+
+    .border-gray-900 {
+        border-color: #1a202c;
+    }
+
+    .rounded-full {
+        border-radius: 9999px;
+    }
+
+    .hidden {
+        display: none;
+    }
 </style>
 {% endblock %}
 
-{% block header_stats %}
-<div class="stats-grid grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-    <div class="stat-card bg-white p-4 rounded-lg shadow">
-        <div class="stat-value text-3xl font-bold text-green-600" id="moleculeCount">-</div>
-        <div class="stat-label">Molecules</div>
-    </div>
-    <div class="stat-card bg-white p-4 rounded-lg shadow">
-        <div class="stat-value text-3xl font-bold text-blue-600" id="organismCount">-</div>
-        <div class="stat-label">Organisms</div>
-    </div>
-    <div class="stat-card bg-white p-4 rounded-lg shadow">
-        <div class="stat-value text-3xl font-bold text-red-600" id="targetCount">-</div>
-        <div class="stat-label">Targets</div>
-    </div>
-</div>
-{% endblock %}
-
-{% block main_content %}
-<!-- Graph Visualization -->
+{% block content %}
+<!-- Graph Visualization - Now takes up full content area -->
 <div id="graph-container">
     <!-- Graph Legend -->
     <div class="graph-legend">
@@ -195,9 +215,16 @@
 <div class="loading-spinner hidden">
     <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
 </div>
+
+<!-- Hidden stats elements to store data -->
+<div id="stats-data" class="hidden">
+    <span id="moleculeCount">0</span>
+    <span id="organismCount">0</span>
+    <span id="targetCount">0</span>
+</div>
 {% endblock %}
 
-{% block extra_scripts %}
+{% block scripts %}
 <script src="https://d3js.org/d3.v7.min.js"></script>
 <script src="{{ url_for('static', filename='js/graph.js') }}"></script>
 <script>
@@ -206,8 +233,15 @@ let graph;
 document.addEventListener('DOMContentLoaded', function() {
     // Check if graph is already initialized
     if (!graph) {
+        console.log('Initializing graph visualization');
+        
         // Initialize graph visualization
-        graph = new GraphVisualization('graph-container');
+        try {
+            graph = new GraphVisualization('graph-container');
+            console.log('Graph initialized successfully');
+        } catch (e) {
+            console.error('Error initializing graph:', e);
+        }
 
         // Show loading spinner
         const loadingSpinner = document.querySelector('.loading-spinner');
@@ -215,9 +249,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
         // Load initial data
         fetch('/api/graph/overview')
-            .then(response => response.json())
+            .then(response => {
+                console.log('API response status:', response.status);
+                return response.json();
+            })
             .then(data => {
-                // Update stats
+                console.log('Received data:', data);
+                
+                // Still update stats (in hidden elements) for future use
                 document.getElementById('moleculeCount').textContent = data.stats.molecules || 0;
                 document.getElementById('organismCount').textContent = data.stats.organisms || 0;
                 document.getElementById('targetCount').textContent = data.stats.targets || 0;

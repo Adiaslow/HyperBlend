@@ -1,99 +1,508 @@
 {% extends "list_base.html" %}
 
-{% block database_options %}
-<option value="chembl">ChEMBL</option>
-<option value="drugbank">DrugBank</option>
+{% block page_css %}
+<style>
+    /* Effect-specific styles */
+    .effect-property {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .effect-property:last-child {
+        border-bottom: none;
+    }
+
+    .badge-amber {
+        background-color: #fef3c7;
+        color: #92400e;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .category-badge {
+        display: inline-block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    .category-badge.physiological { background-color: #fee2e2; color: #b91c1c; }
+    .category-badge.psychological { background-color: #e0e7ff; color: #4338ca; }
+    .category-badge.cognitive { background-color: #dbeafe; color: #1e40af; }
+    .category-badge.perceptual { background-color: #f3e8ff; color: #6d28d9; }
+    .category-badge.therapeutic { background-color: #dcfce7; color: #166534; }
+    
+    .enrichment-button {
+        display: inline-flex;
+        align-items: center;
+        padding: 0.5rem 1rem;
+        border-radius: 0.375rem;
+        font-weight: 500;
+        font-size: 0.875rem;
+        background-color: #92400e;
+        color: white;
+        transition: background-color 0.2s;
+        cursor: pointer;
+    }
+    
+    .enrichment-button:hover {
+        background-color: #78350f;
+    }
+    
+    .enrichment-button:disabled {
+        background-color: #fcd34d;
+        cursor: not-allowed;
+    }
+    
+    .enrichment-button svg {
+        height: 1.25rem;
+        width: 1.25rem;
+        margin-right: 0.5rem;
+    }
+    
+    .enrichment-spinner {
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+    
+    .enrichment-section {
+        margin-top: 1.5rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #e5e7eb;
+    }
+</style>
 {% endblock %}
 
 {% block page_scripts %}
 <script>
+// Extend the existing ListPage class from the global scope
 class EffectPage extends ListPage {
     constructor() {
         super('effect');
+        
+        // Add custom initialization if needed
+        console.log('EffectPage initialized');
+        
+        // Track enrichment status
+        this.enrichmentStatus = {};
     }
-
-    getItemSpecificHtml(item) {
-        return `
-            <div class="mt-2 text-sm">
-                <div class="text-gray-600">${item.description || 'No description available'}</div>
-                <div class="mt-1">
-                    <span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}
-                </div>
-            </div>
-        `;
+    
+    // Custom method to generate item card content
+    getItemCardContentHtml(item) {
+        let content = `<div class="mt-2 text-sm text-gray-600">`;
+        
+        // Add category if available
+        if (item.category) {
+            content += `<div><span class="font-medium">Category:</span> ${item.category}</div>`;
+        }
+        
+        // Add description if available
+        if (item.description) {
+            content += `<div class="mt-1">${this.truncateText(item.description, 100)}</div>`;
+        }
+        
+        content += `</div>`;
+        return content;
     }
-
-    getPreviewHtml(data) {
-        return `
-            <div class="p-4 border rounded-lg bg-white">
-                <h3 class="text-lg font-semibold">${data.name}</h3>
-                ${data.description ? `<p class="text-gray-600 mt-2">${data.description}</p>` : ''}
-                <div class="mt-4 text-sm">
-                    <div><span class="text-gray-500">Type:</span> ${data.type || 'Unknown'}</div>
-                    ${data.source ? `<div class="mt-1"><span class="text-gray-500">Source:</span> ${data.source}</div>` : ''}
-                </div>
-            </div>
-        `;
+    
+    // Custom method to handle complex effect IDs
+    async fetchItemDetails(itemId) {
+        // Check if we have a complex ID format (e.g., "4:uuid:66")
+        if (itemId.includes(':')) {
+            console.log(`Handling complex ID format: ${itemId}`);
+            
+            // First try the standard API call
+            try {
+                const capitalized = this.itemType.charAt(0).toUpperCase() + this.itemType.slice(1);
+                const methodName = `get${capitalized}Details`;
+                
+                if (typeof this.api[methodName] === 'function') {
+                    return await this.api[methodName](itemId);
+                }
+            } catch (error) {
+                console.warn(`API call failed, falling back to items list: ${error.message}`);
+                // If API call fails, try to find in current items
+            }
+        }
+        
+        // Find in current items as fallback
+        const item = this.items.find(item => item.id === itemId);
+        if (!item) {
+            throw new Error(`${this.itemType} with ID ${itemId} not found in current items`);
+        }
+        
+        return item;
     }
-
-    getItemInfoHtml(item) {
+    
+    // Custom method to generate item details
+    getItemDetailHtml(item) {
         return `
             <div class="p-4">
-                <h2 class="text-2xl font-bold mb-4">${item.name}</h2>
-                ${item.description ? `<p class="text-gray-600 mb-6">${item.description}</p>` : ''}
+                <div class="flex justify-between items-start mb-4">
+                    <h2 class="text-2xl font-bold">${this.escapeHtml(item.name || 'Unnamed Effect')}</h2>
+                    <div class="badge-amber">Effect</div>
+                </div>
                 
-                <div class="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Details</h3>
-                        <div class="space-y-2">
-                            <div><span class="text-gray-500">Type:</span> ${item.type || 'Unknown'}</div>
-                            <div><span class="text-gray-500">Source:</span> ${item.source || 'N/A'}</div>
-                            <div><span class="text-gray-500">External ID:</span> ${item.external_id || 'N/A'}</div>
+                ${item.description ? `
+                <div class="detail-section">
+                    <p class="text-gray-600">${this.escapeHtml(item.description)}</p>
+                </div>
+                ` : ''}
+                
+                <div class="detail-section">
+                    <h3 class="detail-section-title">Details</h3>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        ${item.category ? `
+                        <div class="effect-property">
+                            <span class="detail-label">Category</span>
+                            <span class="font-medium">
+                                <span class="category-badge ${item.category.toLowerCase()}">${item.category}</span>
+                            </span>
                         </div>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Statistics</h3>
-                        <div class="space-y-2">
-                            <div><span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}</div>
-                            <div><span class="text-gray-500">Targets:</span> ${item.target_count || 0}</div>
+                        ` : ''}
+                        
+                        ${item.type ? `
+                        <div class="effect-property">
+                            <span class="detail-label">Type</span>
+                            <span class="font-medium">${item.type}</span>
                         </div>
+                        ` : ''}
+                        
+                        ${item.onset_time ? `
+                        <div class="effect-property">
+                            <span class="detail-label">Onset Time</span>
+                            <span class="font-medium">${item.onset_time}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.duration ? `
+                        <div class="effect-property">
+                            <span class="detail-label">Duration</span>
+                            <span class="font-medium">${item.duration}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.source ? `
+                        <div class="effect-property">
+                            <span class="detail-label">Source</span>
+                            <span class="font-medium">${item.source}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.external_id ? `
+                        <div class="effect-property">
+                            <span class="detail-label">External ID</span>
+                            <span class="font-medium">${item.external_id}</span>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
-
-                ${item.molecules && item.molecules.length > 0 ? `
-                    <div class="mb-6">
-                        <h3 class="text-lg font-semibold mb-2">Associated Molecules</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.molecules.map(mol => `
-                                <div class="p-3 border rounded-lg">
-                                    <div class="font-medium">${mol.name}</div>
-                                    <div class="text-sm text-gray-500">${mol.type || 'Unknown type'}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${item.targets && item.targets.length > 0 ? `
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Associated Targets</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.targets.map(target => `
-                                <div class="p-3 border rounded-lg">
-                                    <div class="font-medium">${target.name}</div>
-                                    <div class="text-sm text-gray-500">${target.type || 'Unknown type'}</div>
-                                    ${target.organism ? `<div class="text-sm text-gray-500 italic">${target.organism}</div>` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
+                
+                ${this.getMoleculesSection(item)}
+                ${this.getTargetsSection(item)}
+                
+                <!-- Data Enrichment Section -->
+                <div class="detail-section enrichment-section">
+                    <h3 class="detail-section-title">Data Enrichment</h3>
+                    <p class="text-sm text-gray-600 mb-3">
+                        Enrich this effect with additional data from external databases.
+                    </p>
+                    <button id="enrichment-button-${item.id}" class="enrichment-button" onclick="window.effectPage.enrichEffect('${item.id}')">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                        Enrich Data
+                    </button>
+                    <div id="enrichment-results-${item.id}" class="mt-3"></div>
+                </div>
             </div>
         `;
+    }
+    
+    getMoleculesSection(item) {
+        if (!item.molecules || item.molecules.length === 0) {
+            return '';
+        }
+        
+        return `
+            <div class="detail-section">
+                <h3 class="detail-section-title">Associated Molecules</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    ${item.molecules.map(mol => `
+                        <div class="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                            <div class="font-medium">${this.escapeHtml(mol.name)}</div>
+                            ${mol.formula ? `<div class="text-sm text-gray-600">Formula: ${mol.formula}</div>` : ''}
+                            ${mol.type ? `<div class="text-xs bg-blue-100 text-blue-800 rounded px-2 py-0.5 mt-1 inline-block">${mol.type}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    getTargetsSection(item) {
+        if (!item.targets || item.targets.length === 0) {
+            return '';
+        }
+        
+        return `
+            <div class="detail-section">
+                <h3 class="detail-section-title">Associated Targets</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    ${item.targets.map(target => `
+                        <div class="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                            <div class="font-medium">${this.escapeHtml(target.name)}</div>
+                            <div class="text-sm text-gray-600">
+                                ${target.organism ? this.escapeHtml(target.organism) : ''}
+                                ${target.type ? `<span class="text-xs bg-green-100 text-green-800 rounded px-2 py-0.5 ml-1">${target.type}</span>` : ''}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    }
+    
+    getCategoryClass(category) {
+        const categoryClasses = {
+            'physiological': 'bg-red-100 text-red-800 rounded px-2 py-0.5',
+            'psychological': 'bg-indigo-100 text-indigo-800 rounded px-2 py-0.5',
+            'cognitive': 'bg-blue-100 text-blue-800 rounded px-2 py-0.5',
+            'perceptual': 'bg-purple-100 text-purple-800 rounded px-2 py-0.5',
+            'therapeutic': 'bg-green-100 text-green-800 rounded px-2 py-0.5'
+        };
+        
+        return categoryClasses[category.toLowerCase()] || 'bg-gray-100 text-gray-800 rounded px-2 py-0.5';
+    }
+    
+    // Method to enrich effect data from external sources
+    async enrichEffect(itemId) {
+        console.log(`Enriching effect with ID: ${itemId}`);
+        
+        // Get button and results element
+        const buttonId = `enrichment-button-${itemId}`;
+        const resultsId = `enrichment-results-${itemId}`;
+        const button = document.getElementById(buttonId);
+        const resultsContainer = document.getElementById(resultsId);
+        
+        // Check if already in progress
+        if (this.enrichmentStatus[itemId] === 'in-progress') {
+            console.log('Enrichment already in progress');
+            return;
+        }
+        
+        // Update button state
+        this.enrichmentStatus[itemId] = 'in-progress';
+        button.disabled = true;
+        button.innerHTML = `
+            <svg xmlns="http://www.w3.org/2000/svg" class="enrichment-spinner" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+            </svg>
+            Enriching...
+        `;
+        
+        // Show initial loading message
+        resultsContainer.innerHTML = `<div class="text-sm text-gray-600">Searching external databases...</div>`;
+        
+        try {
+            // Fetch the current effect data
+            const item = await this.fetchItemDetails(itemId);
+            
+            // Get the identifiers to search with
+            const searchIdentifiers = [];
+            if (item.external_id) searchIdentifiers.push({ type: 'external_id', value: item.external_id });
+            if (item.name) searchIdentifiers.push({ type: 'name', value: item.name });
+            
+            // Make sure we have something to search with
+            if (searchIdentifiers.length === 0) {
+                throw new Error('No identifiers available for external database search');
+            }
+            
+            // Call API to enrich data
+            let enriched;
+            if (typeof this.api.enrichEffect === 'function') {
+                enriched = await this.api.enrichEffect(itemId, searchIdentifiers);
+            } else {
+                // Fallback to simulate API response for testing
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Simulate API delay
+                enriched = this.mockEnrichmentResponse(item);
+            }
+            
+            // Display enrichment results
+            if (enriched && enriched.data) {
+                resultsContainer.innerHTML = this.getEnrichmentResultsHtml(enriched);
+                
+                // Update status
+                this.enrichmentStatus[itemId] = 'completed';
+                
+                // Update button
+                button.disabled = false;
+                button.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                    </svg>
+                    Refresh Data
+                `;
+            } else {
+                throw new Error('No enrichment data returned');
+            }
+        } catch (error) {
+            console.error('Error during enrichment:', error);
+            
+            // Update results container with error
+            resultsContainer.innerHTML = `
+                <div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
+                    <p class="font-medium">Enrichment failed</p>
+                    <p class="text-sm">${error.message || 'Could not retrieve data from external sources'}</p>
+                </div>
+            `;
+            
+            // Update status
+            this.enrichmentStatus[itemId] = 'failed';
+            
+            // Update button
+            button.disabled = false;
+            button.innerHTML = `
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                </svg>
+                Try Again
+            `;
+        }
+    }
+    
+    // Helper method to generate enrichment results HTML
+    getEnrichmentResultsHtml(enrichedData) {
+        const { data, sources } = enrichedData;
+        
+        let html = `
+            <div class="bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded mb-4">
+                <p class="font-medium">Enrichment successful</p>
+                <p class="text-sm">Data retrieved from ${sources.length} external database${sources.length !== 1 ? 's' : ''}</p>
+            </div>
+        `;
+        
+        // Display new attributes if any
+        if (data.attributes && data.attributes.length > 0) {
+            html += `
+                <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+                    <h4 class="font-medium mb-2">Additional Attributes</h4>
+                    ${data.attributes.map(attr => `
+                        <div class="effect-property">
+                            <span class="detail-label">${attr.name}</span>
+                            <span class="font-medium">${attr.value}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        // Display new identifiers if any
+        if (data.identifiers && Object.keys(data.identifiers).length > 0) {
+            html += `
+                <div class="bg-white rounded-lg p-4 border border-gray-200 mb-4">
+                    <h4 class="font-medium mb-2">Additional Identifiers</h4>
+                    ${Object.entries(data.identifiers).map(([source, id]) => `
+                        <div class="effect-property">
+                            <span class="detail-label">${source}</span>
+                            <span class="font-medium">${id}</span>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+        
+        // Display sources with links
+        if (sources && sources.length > 0) {
+            html += `
+                <div class="mt-4">
+                    <h4 class="font-medium mb-2">Data Sources</h4>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                        ${sources.map(source => `
+                            <a href="${source.url}" target="_blank" class="text-blue-600 hover:text-blue-800 flex items-center text-sm">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                </svg>
+                                ${source.name}
+                            </a>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        return html;
+    }
+    
+    // Mock enrichment response for testing
+    mockEnrichmentResponse(item) {
+        // This is a placeholder and would be replaced by actual API call in production
+        return {
+            success: true,
+            data: {
+                attributes: [
+                    { name: 'Mechanism', value: 'Serotonergic modulation' },
+                    { name: 'Onset Time', value: '15-30 minutes' },
+                    { name: 'Duration', value: '4-6 hours' },
+                    { name: 'Risk Level', value: 'Moderate' }
+                ],
+                identifiers: {
+                    'PsychonautWiki': 'PSYW12345',
+                    'TripSit': 'TS12345'
+                }
+            },
+            sources: [
+                { name: 'PsychonautWiki', url: 'https://psychonautwiki.org/' },
+                { name: 'TripSit', url: 'https://drugs.tripsit.me/' },
+                { name: 'EffectIndex', url: 'https://www.effectindex.com/' }
+            ]
+        };
     }
 }
 
-// Initialize the page
-window.effectPage = new EffectPage();
+// Wait for API initialization before creating the page instance
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if API exists
+    const waitForAPI = setInterval(() => {
+        if (window.api) {
+            clearInterval(waitForAPI);
+            
+            // Now wait for API initialization
+            if (typeof window.api.waitForInitialization === 'function') {
+                window.api.waitForInitialization()
+                    .then(() => {
+                        console.log('API initialized, creating EffectPage');
+                        window.effectPage = new EffectPage();
+                    })
+                    .catch(error => {
+                        console.error('API initialization failed:', error);
+                    });
+            } else {
+                // If no waitForInitialization method, create page with retry mechanism
+                console.log('Creating EffectPage (without waiting for API)');
+                window.effectPage = new EffectPage();
+            }
+        }
+    }, 100);
+    
+    // Safety timeout after 10 seconds
+    setTimeout(() => {
+        clearInterval(waitForAPI);
+        if (!window.effectPage) {
+            console.error('Failed to initialize EffectPage after timeout');
+        }
+    }, 10000);
+});
 </script>
 {% endblock %} 

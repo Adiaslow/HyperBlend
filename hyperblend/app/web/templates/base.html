@@ -1,293 +1,58 @@
-{% extends "bootstrap/base.html" %}
-
-{% block title %}HyperBlend{% endblock %}
-
-{% block styles %}
-{{ super() }}
-<link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-<style>
-    /* Base styles */
-    body {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-        background-color: #f8fafc;
-        min-height: 100vh;
-        display: flex;
-        flex-direction: column;
-    }
-
-    /* Navbar styles */
-    .navbar {
-        background-color: #1a202c;
-        border: none;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-        min-height: 60px;
-        padding: 0 1rem;
-    }
-
-    .navbar-brand {
-        color: #f7fafc !important;
-        font-weight: 600;
-        font-size: 1.25rem;
-        padding: 0;
-        margin: 0;
-        height: 60px;
-        line-height: 60px;
-    }
-
-    .navbar-toggler {
-        border-color: #e2e8f0;
-        padding: 0.25rem 0.5rem;
-    }
-
-    .navbar-toggler-icon {
-        background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba(255, 255, 255, 0.85)' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
-    }
-
-    .nav-link {
-        color: #e2e8f0 !important;
-        font-weight: 500;
-        padding: 0.5rem 1rem !important;
-        transition: color 0.2s;
-    }
-
-    .nav-link:hover {
-        color: #ffffff !important;
-    }
-
-    /* Search bar styles */
-    .navbar-form {
-        margin: 0;
-        padding: 0;
-        display: flex;
-        align-items: center;
-        min-width: 200px;
-        justify-content: flex-end;
-    }
-
-    .navbar-form .form-group {
-        margin: 0;
-    }
-
-    .navbar-form .form-control {
-        background: rgba(255, 255, 255, 0.1);
-        border: 1px solid rgba(255, 255, 255, 0.2);
-        color: white;
-        width: 200px;
-        height: 34px;
-        padding: 6px 12px;
-        border-radius: 4px;
-        transition: all 0.3s ease;
-    }
-
-    .navbar-form .form-control:focus {
-        background: rgba(255, 255, 255, 0.15);
-        border-color: rgba(255, 255, 255, 0.3);
-        outline: none;
-        box-shadow: none;
-    }
-
-    .navbar-form .form-control::placeholder {
-        color: rgba(255, 255, 255, 0.5);
-    }
-
-    /* Global search styles */
-    .global-search {
-        position: relative;
-        min-width: 300px;
-    }
-
-    @media (max-width: 991.98px) {
-        .global-search {
-            width: 100%;
-            min-width: auto;
-            margin-top: 1rem;
-        }
-
-        .navbar-form .form-control {
-            width: 100%;
-        }
-    }
-
-    .global-search .search-results {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        background: white;
-        border: 1px solid #e2e8f0;
-        border-radius: 0.5rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-        max-height: 400px;
-        overflow-y: auto;
-        z-index: 1000;
-    }
-
-    .global-search .search-results.hidden {
-        display: none;
-    }
-
-    .global-search .search-results > div {
-        padding: 0.75rem 1rem;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    .global-search .search-results > div:last-child {
-        border-bottom: none;
-    }
-
-    .global-search .search-results > div:hover {
-        background-color: #f8fafc;
-    }
-
-    /* Footer styles */
-    .footer {
-        background-color: #1a202c;
-        color: #e2e8f0;
-        padding: 1rem 0;
-        margin-top: auto;
-    }
-
-    .footer-content {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 0 1rem;
-    }
-
-    .footer-links {
-        display: flex;
-        gap: 1.5rem;
-    }
-
-    .footer a {
-        color: #e2e8f0;
-        text-decoration: none;
-        transition: color 0.2s;
-    }
-
-    .footer a:hover {
-        color: #ffffff;
-    }
-</style>
-{% block extra_css %}{% endblock %}
-{% endblock %}
-
-{% block navbar %}
-<nav class="navbar navbar-expand-lg">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="{{ url_for('pages.index') }}">
-            <i class="fas fa-atom mr-2"></i>
-            HyperBlend
-        </a>
-        <button class="navbar-toggler" 
-                type="button" 
-                data-bs-toggle="collapse" 
-                data-bs-target="#navbarNav" 
-                aria-controls="navbarNav" 
-                aria-expanded="false" 
-                aria-label="Toggle navigation">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-        <div class="collapse navbar-collapse" id="navbarNav">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('pages.molecules_page') }}">Molecules</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('pages.targets_page') }}">Targets</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('pages.organisms_page') }}">Organisms</a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="{{ url_for('pages.effects_page') }}">Effects</a>
-                </li>
-            </ul>
-            <div class="global-search">
-                <form id="globalSearchForm" class="navbar-form" data-page-type="{{ request.endpoint.split('.')[-1] if request.endpoint else '' }}">
-                    <div class="form-group">
-                        <input type="search" 
-                               id="globalSearchInput" 
-                               class="form-control" 
-                               placeholder="Search...">
-                    </div>
-                    <div class="search-results hidden absolute mt-2 w-full bg-white shadow-lg rounded-lg overflow-hidden"></div>
-                </form>
-            </div>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HyperBlend{% block title %}{% endblock %}</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/favicon.ico') }}" type="image/x-icon">
+    <!-- Base styles for all pages -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Page type styles (e.g., list.css for listing pages) -->
+    {% block page_type_css %}{% endblock %}
+    <!-- Page-specific styles -->
+    {% block page_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <a href="{{ url_for('pages.index') }}" class="navbar-logo">HyperBlend</a>
         </div>
-    </div>
-</nav>
-{% endblock %}
+        <ul class="navbar-nav">
+            <li class="nav-item">
+                <a href="{{ url_for('pages.index') }}" class="nav-link">Home</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('pages.molecules_page') }}" class="nav-link">Molecules</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('pages.targets_page') }}" class="nav-link">Targets</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('pages.organisms_page') }}" class="nav-link">Organisms</a>
+            </li>
+            <li class="nav-item">
+                <a href="{{ url_for('pages.effects_page') }}" class="nav-link">Effects</a>
+            </li>
+        </ul>
+    </nav>
 
-{% block content %}
-<div class="container mx-auto px-4 py-8">
-    {% block header_stats %}{% endblock %}
-    {% block main_content %}{% endblock %}
-</div>
-{% endblock %}
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
 
-{% block footer %}
-<footer class="footer">
-    <div class="footer-content">
-        <div class="footer-copyright">
-            <p>&copy; {{ now.year }} HyperBlend. All rights reserved.</p>
+    <footer class="footer">
+        <div class="container">
+            <p>&copy; {{ now().year }} HyperBlend - A platform for molecular interactions and effects</p>
         </div>
-        <div class="footer-links">
-            <a href="https://github.com/yourusername/hyperblend" target="_blank">
-                <i class="fab fa-github"></i> GitHub
-            </a>
-            <a href="{{ url_for('main.sources_page') }}">
-                <i class="fas fa-database"></i> Data Sources
-            </a>
-        </div>
-    </div>
-</footer>
-{% endblock %}
+    </footer>
 
-{% block scripts %}
-{{ super() }}
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
-<script src="{{ url_for('static', filename='js/api.js') }}"></script>
-<script src="{{ url_for('static', filename='js/search.js') }}"></script>
-<script src="{{ url_for('static', filename='js/list_page.js') }}"></script>
-<script src="{{ url_for('static', filename='js/app.js') }}"></script>
-
-<script>
-// Wait for all scripts to load before initializing
-window.addEventListener('load', async () => {
-    // Wait for API client to be available
-    let attempts = 0;
-    const maxAttempts = 50;
-    while (!window.api && attempts < maxAttempts) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        attempts++;
-    }
-
-    if (!window.api) {
-        console.error('API client failed to initialize');
-        return;
-    }
-
-    // Initialize global search
-    const searchContainer = document.querySelector('.global-search');
-    if (searchContainer) {
-        window.globalSearch = new GlobalSearch(searchContainer);
-    }
-
-    // Initialize the app
-    if (typeof createApp === 'function') {
-        createApp();
-    }
-});
-</script>
-
-{% block extra_scripts %}{% endblock %}
-{% endblock %} 
+    <!-- Base JavaScript - loaded first -->
+    <script src="{{ url_for('static', filename='js/api.js') }}"></script>
+    
+    <!-- Page type scripts (e.g. list_page.js) - loaded second -->
+    {% block page_type_scripts %}{% endblock %}
+    
+    <!-- Page-specific scripts - loaded last -->
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

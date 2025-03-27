@@ -1,698 +1,665 @@
+// list_page.js - Base class for list pages in the application
+// # hyperblend/app/web/static/js/list_page.js
+
+/**
+ * ListPage - Base class for all pages that display lists of items
+ * Handles common functionality like loading items, searching, and displaying details
+ */
 class ListPage {
-    constructor(itemType) {
+    /**
+     * Initialize list page
+     * @param {string} itemType - Type of items being displayed (e.g., 'molecules', 'targets')
+     * @param {Object} config - Configuration options
+     */
+    constructor(itemType, config = {}) {
         this.itemType = itemType;
         this.items = [];
-        this.currentPage = 1;
-        this.itemsPerPage = 20;
-        this.initialized = false;
-        this.initializationAttempts = 0;
-        this.maxAttempts = 10;
-        this.initializationInterval = 100; // ms between retries
-        this.isLoading = false;
-        this.initialLoadComplete = false;  // New flag to track initial load
-        this._searchHandler = null; // Store reference to search handler
-
-        // Initialize when DOM is ready
-        if (document.readyState === 'loading') {
-            document.addEventListener('DOMContentLoaded', () => this.initialize());
-        } else {
-            this.initialize();
-        }
-    }
-
-    initialize() {
-        try {
-            // If already initialized, don't do anything
-            if (this.initialized) {
-                console.log(`${this.itemType} list page already initialized`);
-                return;
-            }
-
-            console.log(`Starting initialization for ${this.itemType} list page...`);
-            
-            // First ensure the API client exists
-            if (!window.api) {
-                return this.retryInitialization('API client not available');
-            }
-
-            // Then check if it has the required methods for this specific type
-            if (!this.validateAPIClient()) {
-                return this.retryInitialization(`API method list${this.itemType}s not found`);
-            }
-
-            console.log(`Initializing ${this.itemType} list page components...`);
-            
-            // Store API reference
-            this.api = window.api;
-
-            // Initialize UI elements
-            this.initializeElements();
-            
-            // Set up event listeners FIRST
-            this.initializeEventListeners();
-            
-            // Then load initial data for this specific type
-            this.loadItems();
-            
-            this.initialized = true;
-            console.log(`${this.itemType} list page initialized successfully`);
-        } catch (error) {
-            console.error('Error during initialization:', error);
-            this.handleInitializationError(error);
-        }
-    }
-
-    validateAPIClient() {
-        const methodName = `list${this.itemType}s`;
-        return typeof window.api[methodName] === 'function';
-    }
-
-    retryInitialization(reason) {
-        this.initializationAttempts++;
-        if (this.initializationAttempts < this.maxAttempts) {
-            console.log(`${reason}, retrying... (Attempt ${this.initializationAttempts}/${this.maxAttempts})`);
-            setTimeout(() => this.initialize(), this.initializationInterval);
-        } else {
-            this.handleInitializationError(new Error(`Initialization failed after ${this.maxAttempts} attempts: ${reason}`));
-        }
-    }
-
-    handleInitializationError(error) {
-        console.error('Fatal initialization error:', error);
-        this.showError('Unable to initialize list page. Please refresh the page or contact support if the problem persists.');
-    }
-
-    initializeElements() {
-        console.log('Initializing list page elements...');
+        this.filteredItems = [];
+        this.currentItemId = null;
+        this.editMode = false;
         
-        // Get list container
-        this.listContainer = document.querySelector('.list-container');
-        if (!this.listContainer) {
-            throw new Error('List container not found');
-        }
-        console.log('Found list container');
-
-        // Get item list
-        this.itemList = document.getElementById('itemList');
-        if (!this.itemList) {
-            throw new Error('Item list element not found');
-        }
-        console.log('Found item list');
-
-        // Get other elements
+        console.log(`Initializing ${itemType} list page`);
+        
+        // UI Elements
+        this.itemsContainer = document.getElementById('itemsContainer');
+        this.itemsList = document.getElementById('itemsList');
         this.searchInput = document.getElementById('searchInput');
-        this.loadingSpinner = document.getElementById('loadingSpinner');
-        this.itemModal = document.getElementById('itemModal');
-        this.confirmModal = document.getElementById('confirmModal');
-        this.paginationContainer = document.getElementById('pagination');
-        this.itemCountDisplay = document.getElementById('itemCount');
-
-        // Initialize loading state
-        if (this.loadingSpinner) {
-            this.hideLoading();
-        } else {
-            console.warn('Loading spinner element not found');
-        }
-
-        console.log('List page elements initialized');
-    }
-
-    initializeEventListeners() {
-        // Search with debounce
-        if (this.searchInput) {
-            // Clear any existing value WITHOUT triggering the input event
-            this.searchInput.value = '';
-            
-            // Store reference to the handler for cleanup
-            this._searchHandler = debounce((event) => {
-                const query = event.target.value.trim();
-                // Only trigger search if we've completed initial load
-                if (this.initialLoadComplete) {
-                    this.loadItems(query);
-                }
-            }, 300);
-            
-            this.searchInput.addEventListener('input', this._searchHandler);
-        }
-
-        // Item click handler
-        if (this.itemList) {
-            this.itemList.addEventListener('click', (event) => {
-                const itemElement = event.target.closest('.item');
-                if (itemElement) {
-                    const itemId = itemElement.dataset.id;
-                    this.handleItemClick(itemId);
-                }
-            });
-        }
-
-        // Modal close handlers
-        if (this.itemModal) {
-            const closeButtons = this.itemModal.querySelectorAll('.close-modal');
-            closeButtons.forEach(button => {
-                button.addEventListener('click', () => this.closeModal(this.itemModal));
-            });
-        }
-
-        if (this.confirmModal) {
-            const closeButtons = this.confirmModal.querySelectorAll('.close-modal');
-            closeButtons.forEach(button => {
-                button.addEventListener('click', () => this.closeModal(this.confirmModal));
-            });
-        }
-    }
-
-    async loadItems(query = '') {
-        try {
-            // If we're already loading, skip
-            if (this.isLoading) {
-                console.log('Skipping load - already loading');
-                return;
-            }
-
-            this.isLoading = true;
-            this.showLoading();
-            console.log(`Loading ${this.itemType}s with query:`, query);
-            
-            // Get the specific method for this item type
-            const method = `list${this.itemType}s`;
-            if (typeof this.api[method] !== 'function') {
-                throw new Error(`API method ${method} not found`);
-            }
-            
-            // Only call the API method for this specific type
-            const response = await this.api[method](query || undefined);
-            console.log(`Received ${this.itemType}s response:`, response);
-            
-            // Handle response based on structure
-            let newItems = [];
-            if (response && typeof response === 'object') {
-                if (Array.isArray(response)) {
-                    newItems = response;
-                } else if (response.status === 'success') {
-                    // Extract items from the response based on item type
-                    const key = this.itemType.toLowerCase() + 's';
-                    if (response[key] && Array.isArray(response[key])) {
-                        newItems = response[key];
-                    } else {
-                        console.warn(`No ${key} array found in response:`, response);
-                    }
-                } else if (response.items && Array.isArray(response.items)) {
-                    newItems = response.items;
-                } else {
-                    console.warn('Unexpected response structure:', response);
-                }
-            } else {
-                console.warn('Invalid response:', response);
-            }
-            
-            // Update items if:
-            // 1. We have new items OR
-            // 2. We have a search query OR
-            // 3. This is our first load
-            if (newItems.length > 0 || query !== '' || !this.initialLoadComplete) {
-                this.items = newItems;
-                console.log(`Processed ${this.items.length} ${this.itemType}s:`, this.items);
-            }
-            
-            // Always render items, even if empty
-            this.renderItems();
-            this.updateItemCount();
-            
-            // Mark initial load as complete
-            if (!this.initialLoadComplete) {
-                this.initialLoadComplete = true;
-                console.log('Initial load complete');
-            }
-        } catch (error) {
-            console.error('Error loading items:', error);
-            this.showError(`Error loading ${this.itemType}s. Please try again.`);
-            // Show error state in the list
-            if (this.itemList) {
-                this.itemList.innerHTML = `
-                    <div class="p-4 text-red-600 bg-red-50 border border-red-200 rounded">
-                        <p class="font-medium">Error loading ${this.itemType}s</p>
-                        <p class="text-sm">${error.message}</p>
-                    </div>
-                `;
-            }
-        } finally {
-            this.isLoading = false;
-            this.hideLoading();
-        }
-    }
-
-    renderItems() {
-        if (!this.itemList) {
-            console.error('Item list element not found');
-            return;
-        }
-
-        const startIndex = (this.currentPage - 1) * this.itemsPerPage;
-        const endIndex = startIndex + this.itemsPerPage;
-        const pageItems = this.items.slice(startIndex, endIndex);
-
-        console.log(`Rendering ${pageItems.length} items for page ${this.currentPage}`);
-
-        if (pageItems.length === 0) {
-            this.itemList.innerHTML = `
-                <div class="p-4 text-gray-600 bg-gray-50 border border-gray-200 rounded">
-                    No ${this.itemType}s found
-                </div>
-            `;
-            return;
-        }
-
-        this.itemList.innerHTML = pageItems.map(item => this.renderItemHtml(item)).join('');
-        this.updatePagination();
-    }
-
-    renderItemHtml(item) {
-        if (!item || !item.name) {
-            console.warn('Invalid item data:', item);
-            return '';
-        }
-
-        // Ensure we have a valid ID and it's a string
-        const rawId = item.id != null ? String(item.id) : '';
-        const itemId = this.cleanItemId(rawId) || rawId;
-
-        return `
-            <div class="item p-4 border rounded-lg mb-4 hover:bg-gray-50 cursor-pointer" data-id="${itemId}">
-                <div class="flex justify-between items-start">
-                    <div>
-                        <h3 class="text-lg font-semibold">${item.name}</h3>
-                        ${item.description ? `<p class="text-gray-600 mt-1">${this.truncateString(item.description, 150)}</p>` : ''}
-                    </div>
-                    ${this.renderItemBadge(item)}
-                </div>
-                ${this.renderItemSpecificInfo(item)}
-            </div>
-        `;
-    }
-
-    renderItemBadge(item) {
-        const type = item.type ? item.type.toLowerCase() : this.itemType.toLowerCase();
-        return `
-            <span class="px-2 py-1 rounded ${this.getBadgeClasses(type)} text-sm">
-                ${item.type || type}
-            </span>
-        `;
-    }
-
-    getBadgeClasses(type) {
-        const classes = {
-            molecule: 'bg-green-100 text-green-800',
-            target: 'bg-blue-100 text-blue-800',
-            organism: 'bg-purple-100 text-purple-800',
-            effect: 'bg-yellow-100 text-yellow-800',
-            physiological: 'bg-red-100 text-red-800',
-            behavioral: 'bg-blue-100 text-blue-800',
-            perceptual: 'bg-purple-100 text-purple-800',
-            emotional: 'bg-pink-100 text-pink-800',
-            cognitive: 'bg-indigo-100 text-indigo-800',
-            consciousness: 'bg-teal-100 text-teal-800',
-            therapeutic: 'bg-green-100 text-green-800',
-            interpersonal: 'bg-orange-100 text-orange-800'
+        this.searchButton = document.getElementById('searchButton');
+        this.detailsPanel = document.getElementById('itemDetailsPanel');
+        this.detailsContent = document.getElementById('itemDetailsContent');
+        this.detailsTitle = document.getElementById('itemDetailsTitle');
+        this.closeDetailsButton = document.getElementById('closeDetailsButton');
+        this.editItemButton = document.getElementById('editItemButton');
+        this.deleteItemButton = document.getElementById('deleteItemButton');
+        this.itemForm = document.getElementById('itemForm');
+        this.resetFormButton = document.getElementById('resetFormButton');
+        this.formResult = document.getElementById('formResult');
+        
+        // Log which elements were found
+        console.log({
+            itemsContainer: !!this.itemsContainer, 
+            itemsList: !!this.itemsList,
+            detailsPanel: !!this.detailsPanel,
+            detailsContent: !!this.detailsContent,
+            detailsTitle: !!this.detailsTitle
+        });
+        
+        // Configuration
+        this.config = {
+            itemsPerPage: 50,
+            ...config
         };
-        return classes[type] || 'bg-gray-100 text-gray-800';
+        
+        // Initialize API instance
+        this.api = new HyperBlendAPI();
+        
+        // Apply viewport constraints
+        this.applyViewportConstraints();
+        
+        // Set up event listeners
+        this.setupEventListeners();
+        
+        // Load items
+        this.fetchItems();
     }
-
-    truncateString(str, length) {
-        if (!str) return '';
-        return str.length > length ? str.substring(0, length) + '...' : str;
-    }
-
-    formatNumber(num) {
-        return new Intl.NumberFormat().format(num);
-    }
-
-    renderItemSpecificInfo(item) {
-        switch (this.itemType.toLowerCase()) {
-            case 'molecule':
-                return `
-                    <div class="mt-2 text-sm text-gray-500">
-                        ${item.formula ? `<span class="mr-4">Formula: ${item.formula}</span>` : ''}
-                        ${item.molecular_weight ? `<span>MW: ${item.molecular_weight}</span>` : ''}
-                    </div>
-                `;
-            case 'target':
-                return `
-                    <div class="mt-2 text-sm text-gray-500">
-                        ${item.organism ? `<span class="mr-4">Organism: ${item.organism}</span>` : ''}
-                        ${item.type ? `<span>Type: ${item.type}</span>` : ''}
-                    </div>
-                `;
-            case 'organism':
-                return `
-                    <div class="mt-2 text-sm text-gray-500">
-                        ${item.taxonomy ? `<span>Taxonomy: ${item.taxonomy}</span>` : ''}
-                    </div>
-                `;
-            case 'effect':
-                return `
-                    <div class="mt-2 text-sm text-gray-500">
-                        ${item.category ? `<span>Category: ${item.category}</span>` : ''}
-                    </div>
-                `;
-            default:
-                return '';
+    
+    /**
+     * Apply viewport constraints to make the page fit within viewport height
+     */
+    applyViewportConstraints() {
+        // Let the flexbox layout handle sizing - don't set explicit heights
+        
+        // Make list container scrollable within its space
+        if (this.itemsList) {
+            this.itemsList.style.overflowY = 'auto';
         }
+        
+        // Make details panel scrollable
+        if (this.detailsPanel) {
+            this.detailsPanel.style.overflowY = 'auto';
+        }
+        
+        // Add resize events to handle any needed adjustments
+        window.addEventListener('resize', () => {
+            // No explicit height adjustments needed - flexbox handles it
+        });
     }
-
-    async handleItemClick(itemId) {
+    
+    /**
+     * Set up event listeners for search, details panel, etc.
+     */
+    setupEventListeners() {
+        // Search functionality
+        if (this.searchInput && this.searchButton) {
+            this.searchButton.addEventListener('click', () => this.searchItems());
+            this.searchInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') {
+                    this.searchItems();
+                }
+            });
+        }
+        
+        // Close details panel
+        if (this.closeDetailsButton) {
+            this.closeDetailsButton.addEventListener('click', () => this.closeDetails());
+        }
+        
+        // Edit button 
+        if (this.editItemButton) {
+            this.editItemButton.addEventListener('click', () => {
+                if (this.currentItemId) {
+                    this.editItem(this.currentItemId);
+                }
+            });
+        }
+        
+        // Delete button
+        if (this.deleteItemButton) {
+            this.deleteItemButton.addEventListener('click', () => {
+                if (this.currentItemId) {
+                    this.confirmDeleteItem(this.currentItemId);
+                }
+            });
+        }
+        
+        // Form submission
+        if (this.itemForm) {
+            this.itemForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.handleFormSubmit();
+            });
+        }
+        
+        // Reset form button
+        if (this.resetFormButton) {
+            this.resetFormButton.addEventListener('click', () => {
+                this.resetForm();
+            });
+        }
+        
+        // Close details panel on escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && this.detailsPanel) {
+                this.closeDetails();
+            }
+        });
+    }
+    
+    /**
+     * Fetch items from the API
+     */
+    async fetchItems() {
         try {
-            if (!itemId) {
-                throw new Error('No item ID provided');
-            }
-
-            // Clean up and validate the item ID
-            const cleanId = this.cleanItemId(itemId);
-            if (!cleanId) {
-                throw new Error('Invalid item ID format');
-            }
-
-            this.showLoading();
-            const item = await this.api.getMolecule(cleanId);
-            
-            if (!item) {
-                throw new Error('Item not found');
+            // Make sure API is ready
+            if (this.api && this.api.waitForInitialization) {
+                await this.api.waitForInitialization();
             }
             
-            // Show item details
-            this.showInfoContainer(item);
+            // Show loading state
+            if (this.itemsList) {
+                this.itemsList.innerHTML = '<div class="loading">Loading...</div>';
+            }
+            
+            // Call appropriate API method based on item type
+            if (this.itemType === 'molecules') {
+                this.items = await this.api.getMolecules(this.searchQuery || '');
+            } else if (this.itemType === 'targets') {
+                this.items = await this.api.getTargets(this.searchQuery || '');
+            } else if (this.itemType === 'organisms') {
+                this.items = await this.api.getOrganisms(this.searchQuery || '');
+            } else if (this.itemType === 'effects') {
+                this.items = await this.api.getEffects(this.searchQuery || '');
+            }
+            
+            // Ensure items is always an array
+            if (!Array.isArray(this.items)) {
+                this.items = [];
+            }
+            
+            this.filteredItems = [...this.items];
+            this.renderItems();
+            
+            // If we have a current item ID, refresh its details
+            if (this.currentItemId) {
+                this.fetchItemDetails(this.currentItemId, true);
+            }
         } catch (error) {
-            console.error('Error fetching item details:', error);
+            console.error(`Error fetching ${this.itemType}:`, error);
             
-            let errorMessage = 'Error loading item details. ';
-            if (error.message.includes('503')) {
-                errorMessage += 'The service is temporarily unavailable. Please try again in a few moments.';
-            } else if (error.message.includes('Invalid item ID')) {
-                errorMessage += 'The item ID format is invalid. Please try refreshing the page.';
-            } else {
-                errorMessage += error.message;
+            // Check if error might be related to back/forward cache issues
+            if (error.message && (
+                error.message.includes('channel is closed') || 
+                error.message.includes('back/forward cache')
+            )) {
+                console.log('Connection issue detected during fetch, reinitializing and retrying...');
+                if (this.api) {
+                    this.api.initialized = false;
+                    await this.api.waitForInitialization();
+                    // Try again after reinitialization
+                    return this.fetchItems();
+                }
             }
             
-            this.showError(errorMessage);
-            
-            // If we have an info container, show the error there too
-            if (this.infoContent) {
-                this.infoContent.innerHTML = `
-                    <div class="p-4 text-red-600 bg-red-50 border border-red-200 rounded">
-                        <p class="font-medium">Error</p>
-                        <p class="text-sm">${errorMessage}</p>
-                        <button onclick="window.location.reload()" class="mt-2 px-4 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200">
-                            Retry
-                        </button>
+            if (this.itemsList) {
+                this.itemsList.innerHTML = `
+                    <div class="error-message">
+                        Error loading ${this.itemType}: ${error.message}
+                        <button class="retry-button" onclick="try { if (window.${this.itemType}Page) { window.${this.itemType}Page.fetchItems(); } else { location.reload(); } } catch(e) { console.error('Error retrying:', e); location.reload(); }">Retry</button>
                     </div>
                 `;
             }
-        } finally {
-            this.hideLoading();
         }
     }
-
-    cleanItemId(itemId) {
-        // Handle null, undefined, or non-string input
-        if (!itemId || typeof itemId !== 'string') {
-            console.warn('Invalid itemId provided to cleanItemId:', itemId);
-            return null;
+    
+    /**
+     * Render items to the list
+     */
+    renderItems() {
+        if (!this.itemsList) return;
+        
+        if (this.filteredItems.length === 0) {
+            this.itemsList.innerHTML = `<div class="empty-message">No ${this.itemType} found</div>`;
+            return;
         }
         
-        // If the ID contains colons, take the UUID part (assuming format like "4:uuid:66")
-        if (itemId.includes(':')) {
-            const parts = itemId.split(':');
-            // If we have a UUID in the middle, return it
-            if (parts.length === 3 && this.isValidUUID(parts[1])) {
-                return parts[1];
-            }
-            // If the whole thing is a UUID, return it
-            if (parts.length === 1 && this.isValidUUID(parts[0])) {
-                return parts[0];
-            }
-            return null;
-        }
+        // Build HTML for items
+        const itemsHtml = this.filteredItems.map(item => this.getItemHtml(item)).join('');
+        this.itemsList.innerHTML = itemsHtml;
         
-        // If it's already a clean UUID, return it
-        return this.isValidUUID(itemId) ? itemId : null;
-    }
-
-    isValidUUID(uuid) {
-        const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-        return uuidRegex.test(uuid);
-    }
-
-    showItemModal(item) {
-        if (!this.itemModal) return;
-
-        const modalContent = this.renderModalContent(item);
-        this.itemModal.querySelector('.modal-content').innerHTML = modalContent;
-        this.itemModal.classList.remove('hidden');
-    }
-
-    renderModalContent(item) {
-        return `
-            <div class="p-6">
-                <div class="flex justify-between items-start mb-4">
-                    <h2 class="text-2xl font-bold">${item.name}</h2>
-                    <button class="close-modal text-gray-500 hover:text-gray-700">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
-                        </svg>
-                    </button>
-                </div>
-                ${this.renderModalSpecificContent(item)}
-            </div>
-        `;
-    }
-
-    renderModalSpecificContent(item) {
-        switch (this.itemType.toLowerCase()) {
-            case 'molecule':
-                return `
-                    <div class="space-y-4">
-                        ${item.description ? `<p class="text-gray-600">${item.description}</p>` : ''}
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.formula ? `<div><span class="font-semibold">Formula:</span> ${item.formula}</div>` : ''}
-                            ${item.molecular_weight ? `<div><span class="font-semibold">MW:</span> ${item.molecular_weight}</div>` : ''}
-                            ${item.smiles ? `<div class="col-span-2"><span class="font-semibold">SMILES:</span> <span class="font-mono text-sm">${item.smiles}</span></div>` : ''}
-                        </div>
-                        ${this.renderRelatedItems(item)}
-                    </div>
-                `;
-            case 'target':
-                return `
-                    <div class="space-y-4">
-                        ${item.description ? `<p class="text-gray-600">${item.description}</p>` : ''}
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.organism ? `<div><span class="font-semibold">Organism:</span> ${item.organism}</div>` : ''}
-                            ${item.type ? `<div><span class="font-semibold">Type:</span> ${item.type}</div>` : ''}
-                        </div>
-                        ${this.renderRelatedItems(item)}
-                    </div>
-                `;
-            case 'organism':
-                return `
-                    <div class="space-y-4">
-                        ${item.description ? `<p class="text-gray-600">${item.description}</p>` : ''}
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.taxonomy ? `<div><span class="font-semibold">Taxonomy:</span> ${item.taxonomy}</div>` : ''}
-                        </div>
-                        ${this.renderRelatedItems(item)}
-                    </div>
-                `;
-            case 'effect':
-                return `
-                    <div class="space-y-4">
-                        ${item.description ? `<p class="text-gray-600">${item.description}</p>` : ''}
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.category ? `<div><span class="font-semibold">Category:</span> ${item.category}</div>` : ''}
-                        </div>
-                        ${this.renderRelatedItems(item)}
-                    </div>
-                `;
-            default:
-                return '';
-        }
-    }
-
-    renderRelatedItems(item) {
-        if (!item.related_items || item.related_items.length === 0) return '';
-
-        return `
-            <div class="mt-6">
-                <h3 class="text-lg font-semibold mb-3">Related Items</h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    ${item.related_items.map(related => `
-                        <div class="p-3 border rounded-lg">
-                            <div class="font-medium">${related.name}</div>
-                            <div class="text-sm text-gray-500">${related.type}</div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    async searchDatabase(query) {
-        // Only search if there's actually a query
-        if (query) {
-            await this.loadItems(query);
+        // Set a global reference so the event handlers can access it
+        window.currentPage = this;
+        
+        // Let the external event handlers take care of attaching click events
+        // The attachListItemEventListeners function handles any list item with the .list-item-card class
+        if (typeof attachListItemEventListeners === 'function') {
+            attachListItemEventListeners();
         } else {
-            // If no query, load all items
-            await this.loadItems();
+            console.warn('Generic list event handler function not found, falling back to direct attachment');
+            
+            // Fallback: Add click event listeners directly
+            const cards = this.itemsList.querySelectorAll('.list-item-card');
+            cards.forEach(card => {
+                const itemId = card.getAttribute('data-id');
+                if (itemId) {
+                    card.addEventListener('click', () => {
+                        // Highlight the selected card
+                        cards.forEach(c => c.classList.remove('selected'));
+                        card.classList.add('selected');
+                        
+                        // Show details for this item
+                        this.fetchItemDetails(itemId);
+                    });
+                }
+            });
         }
     }
-
-    updatePagination() {
-        if (!this.paginationContainer) return;
-
-        const totalPages = Math.ceil(this.items.length / this.itemsPerPage);
-        let paginationHtml = '';
-
-        if (totalPages > 1) {
-            paginationHtml = `
-                <div class="flex justify-center space-x-2">
-                    <button class="pagination-btn" ${this.currentPage === 1 ? 'disabled' : ''} 
-                            onclick="this.currentPage = 1; this.renderItems()">
-                        First
-                    </button>
-                    <button class="pagination-btn" ${this.currentPage === 1 ? 'disabled' : ''} 
-                            onclick="this.currentPage--; this.renderItems()">
-                        Previous
-                    </button>
-                    <span class="px-4 py-2">Page ${this.currentPage} of ${totalPages}</span>
-                    <button class="pagination-btn" ${this.currentPage === totalPages ? 'disabled' : ''} 
-                            onclick="this.currentPage++; this.renderItems()">
-                        Next
-                    </button>
-                    <button class="pagination-btn" ${this.currentPage === totalPages ? 'disabled' : ''} 
-                            onclick="this.currentPage = ${totalPages}; this.renderItems()">
-                        Last
-                    </button>
+    
+    /**
+     * Generate HTML for a single item in the list
+     * @param {Object} item - Item data
+     * @returns {string} HTML for the item
+     */
+    getItemHtml(item) {
+        // Create clickable card for the item (no action buttons)
+        const isSelected = this.currentItemId === item.id ? 'selected' : '';
+        
+        return `
+            <div class="list-item-card ${isSelected}" data-id="${item.id}">
+                <div class="list-item-header">
+                    <h3 class="list-item-title">${item.name || 'Unnamed Item'}</h3>
+                </div>
+                <div class="list-item-details">
+                    ${item.id ? `<div class="list-item-property"><span>ID:</span> <span>${item.id}</span></div>` : ''}
+                    ${item.description ? `<div class="list-item-property"><span>Description:</span> <span class="truncate-text">${this.truncateText(item.description, 50)}</span></div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+    
+    /**
+     * Search items based on search input
+     */
+    searchItems() {
+        const query = this.searchInput.value.trim().toLowerCase();
+        
+        if (!query) {
+            this.filteredItems = [...this.items];
+        } else {
+            this.filteredItems = this.items.filter(item => {
+                // Search by name
+                if (item.name && item.name.toLowerCase().includes(query)) {
+                    return true;
+                }
+                
+                // Search by ID
+                if (item.id && item.id.toString().toLowerCase().includes(query)) {
+                    return true;
+                }
+                
+                // Search by description if available
+                if (item.description && item.description.toLowerCase().includes(query)) {
+                    return true;
+                }
+                
+                // Add other searchable fields as needed
+                return false;
+            });
+        }
+        
+        this.renderItems();
+    }
+    
+    /**
+     * Fetch and display details for an item
+     * @param {string} itemId - ID of the item to display
+     * @param {boolean} skipApiCall - If true, skip API call and use loaded items
+     * @returns {Object} The item details
+     */
+    async fetchItemDetails(itemId, skipApiCall = false) {
+        console.log(`Fetching details for ${this.itemType} with ID: ${itemId}`);
+        console.log(`Details panel element:`, this.detailsPanel);
+        console.log(`Details content element:`, this.detailsContent);
+        
+        try {
+            // Make sure API is ready
+            if (this.api && this.api.waitForInitialization) {
+                await this.api.waitForInitialization();
+            }
+            
+            // Look for the item in already loaded items first
+            const foundItem = this.findItemById(itemId);
+            let itemDetails = foundItem;
+            
+            // If not found in loaded items or we need fresh data, call API
+            if (!skipApiCall || !foundItem) {
+                // Call appropriate API method based on item type
+                if (this.itemType === 'molecules') {
+                    itemDetails = await this.api.getMolecule(itemId);
+                } else if (this.itemType === 'targets') {
+                    itemDetails = await this.api.getTarget(itemId);
+                } else if (this.itemType === 'organisms') {
+                    itemDetails = await this.api.getOrganism(itemId);
+                } else if (this.itemType === 'effects') {
+                    itemDetails = await this.api.getEffect(itemId);
+                }
+                
+                // Update the local item if found
+                if (itemDetails && foundItem) {
+                    this.updateLoadedItem(itemDetails);
+                }
+            }
+            
+            if (!itemDetails) {
+                throw new Error(`${this.itemType} not found`);
+            }
+            
+            // Update current item
+            this.currentItemId = itemId;
+            
+            // Update details panel
+            if (this.detailsTitle) {
+                this.detailsTitle.textContent = `${itemDetails.name || 'Unnamed'} Details`;
+            }
+            
+            if (this.detailsContent) {
+                console.log(`Updating details content with:`, itemDetails);
+                const detailsHtml = this.getItemDetailHtml(itemDetails);
+                console.log(`Generated HTML:`, detailsHtml);
+                this.detailsContent.innerHTML = detailsHtml;
+            } else {
+                console.error(`Details content element not found`);
+            }
+            
+            // Show details panel (it's always visible in the three-column layout)
+            if (this.detailsPanel) {
+                console.log(`Adding 'active' class to details panel`);
+                this.detailsPanel.classList.add('active');
+            } else {
+                console.error(`Details panel element not found`);
+            }
+            
+            return itemDetails;
+        } catch (error) {
+            console.error(`Error fetching ${this.itemType} details:`, error);
+            
+            // Check if error might be related to back/forward cache issues
+            if (error.message && (
+                error.message.includes('channel is closed') || 
+                error.message.includes('back/forward cache')
+            )) {
+                console.log('Connection issue detected during fetchItemDetails, reinitializing and retrying...');
+                if (this.api) {
+                    this.api.initialized = false;
+                    await this.api.waitForInitialization();
+                    // Try again after reinitialization (but don't create an infinite loop)
+                    if (!skipApiCall) {
+                        return this.fetchItemDetails(itemId, skipApiCall);
+                    }
+                }
+            }
+            
+            if (this.detailsContent) {
+                this.detailsContent.innerHTML = `
+                    <div class="error-message">
+                        Error loading ${this.itemType} details: ${error.message}
+                        <button class="retry-button" onclick="window.${this.itemType}Page.fetchItemDetails('${itemId}', false)">Retry</button>
+                    </div>
+                `;
+            }
+            return null;
+        }
+    }
+    
+    /**
+     * Generate HTML for item details
+     * @param {Object} item - The item to display
+     * @returns {string} HTML representation
+     */
+    getItemDetailHtml(item) {
+        // Base implementation with consistent structure
+        return `
+            <div class="details-container">
+                <h2 class="details-title">${item.name || 'Unnamed Item'}</h2>
+                
+                <div class="details-section">
+                    <h3 class="section-title">Basic Information</h3>
+                    <div class="details-properties">
+                        ${item.id ? `
+                            <div class="property-row">
+                                <span class="property-name">ID</span>
+                                <span class="property-value">${item.id}</span>
+                            </div>` : ''}
+                        
+                        ${item.description ? `
+                            <div class="property-row">
+                                <span class="property-name">Description</span>
+                                <span class="property-value">${item.description}</span>
+                            </div>` : ''}
+                            
+                        ${this.getAdditionalPropertiesHtml(item)}
+                    </div>
+                </div>
+                
+                ${this.getAdditionalSectionsHtml(item)}
+            </div>
+        `;
+    }
+    
+    /**
+     * Generate HTML for additional properties in the basic info section
+     * @param {Object} item - The item data
+     * @returns {string} HTML for additional properties
+     */
+    getAdditionalPropertiesHtml(item) {
+        // Base implementation returns empty string
+        // Subclasses should override this to provide type-specific properties
+        return '';
+    }
+    
+    /**
+     * Generate HTML for additional sections beyond basic info
+     * @param {Object} item - The item data
+     * @returns {string} HTML for additional sections
+     */
+    getAdditionalSectionsHtml(item) {
+        // Base implementation returns empty string
+        // Subclasses should override this to provide type-specific sections
+        return '';
+    }
+    
+    /**
+     * Close the details panel
+     */
+    closeDetails() {
+        this.currentItemId = null;
+        
+        if (this.detailsPanel) {
+            this.detailsPanel.classList.remove('active');
+        }
+        
+        if (this.detailsContent) {
+            this.detailsContent.innerHTML = `
+                <div class="no-selection">
+                    <p>Select an item from the list to view details</p>
                 </div>
             `;
         }
-
-        this.paginationContainer.innerHTML = paginationHtml;
-    }
-
-    updateItemCount() {
-        if (this.itemCountDisplay) {
-            const count = this.items.length;
-            this.itemCountDisplay.textContent = `${count.toLocaleString()} ${this.itemType}${count === 1 ? '' : 's'}`;
-        }
-    }
-
-    showLoading() {
-        if (this.loadingSpinner) {
-            this.loadingSpinner.classList.remove('hidden');
-        }
-    }
-
-    hideLoading() {
-        if (this.loadingSpinner) {
-            this.loadingSpinner.classList.add('hidden');
-        }
-    }
-
-    showError(message) {
-        const errorContainer = document.getElementById('errorContainer') || this.createErrorContainer();
-        errorContainer.textContent = message;
-        errorContainer.classList.remove('hidden');
         
-        // Auto-hide after 5 seconds
-        setTimeout(() => {
-            errorContainer.classList.add('hidden');
-        }, 5000);
-    }
-
-    createErrorContainer() {
-        const container = document.createElement('div');
-        container.id = 'errorContainer';
-        container.className = 'error-message fixed top-4 right-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg hidden';
-        document.body.appendChild(container);
-        return container;
-    }
-
-    closeModal(modal) {
-        if (modal) {
-            modal.classList.add('hidden');
+        if (this.detailsTitle) {
+            this.detailsTitle.textContent = `${this.itemType} Details`;
         }
+    }
+    
+    /**
+     * Populate the form with item data for editing
+     * @param {string} itemId - ID of the item to edit
+     */
+    async editItem(itemId) {
+        try {
+            const item = await this.fetchItemDetails(itemId, true);
+            if (!item) return;
+            
+            this.editMode = true;
+            this.populateForm(item);
+            
+            // Scroll to the form
+            this.itemForm.scrollIntoView({ behavior: 'smooth' });
+        } catch (error) {
+            console.error(`Error editing ${this.itemType}:`, error);
+            this.showFormMessage(`Error editing ${this.itemType}: ${error.message}`, 'error');
+        }
+    }
+    
+    /**
+     * Reset the form to add mode
+     */
+    resetForm() {
+        this.itemForm.reset();
+        this.editMode = false;
+        this.currentItemId = null;
+        this.formResult.classList.add('hidden');
+    }
+    
+    /**
+     * Show a message in the form result area
+     * @param {string} message - Message to display
+     * @param {string} type - Message type (success/error)
+     */
+    showFormMessage(message, type = 'success') {
+        if (this.formResult) {
+            this.formResult.textContent = message;
+            this.formResult.className = `result-message ${type}`;
+            this.formResult.classList.remove('hidden');
+            
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                this.formResult.classList.add('hidden');
+            }, 5000);
+        }
+    }
+    
+    /**
+     * Handle form submission (create or update)
+     */
+    async handleFormSubmit() {
+        try {
+            const formData = this.getFormData();
+            
+            if (this.editMode && this.currentItemId) {
+                // Update existing item
+                const updatedItem = await this.updateItem(this.currentItemId, formData);
+                if (updatedItem) {
+                    this.showFormMessage(`${this.itemType} updated successfully`);
+                    this.updateLoadedItem(updatedItem);
+                    this.renderItems();
+                    this.fetchItemDetails(updatedItem.id, true);
+                }
+            } else {
+                // Create new item
+                const newItem = await this.createItem(formData);
+                if (newItem) {
+                    this.showFormMessage(`${this.itemType} created successfully`);
+                    this.items.unshift(newItem);
+                    this.filteredItems = [...this.items];
+                    this.renderItems();
+                    this.fetchItemDetails(newItem.id, true);
+                    this.resetForm();
+                }
+            }
+        } catch (error) {
+            console.error(`Error submitting ${this.itemType} form:`, error);
+            this.showFormMessage(`Error: ${error.message}`, 'error');
+        }
+    }
+    
+    /**
+     * Get form data as an object
+     * @returns {Object} Form data object
+     */
+    getFormData() {
+        // Base implementation - should be overridden by subclasses
+        return {};
+    }
+    
+    /**
+     * Populate form fields with item data
+     * @param {Object} item - Item data to populate
+     */
+    populateForm(item) {
+        // Base implementation - should be overridden by subclasses
+        console.log('populateForm() should be implemented by subclasses');
+    }
+    
+    /**
+     * Find an item by ID in the loaded items
+     * @param {string} itemId - ID to find
+     * @returns {Object|null} Found item or null
+     */
+    findItemById(itemId) {
+        if (!this.items || !this.items.length) return null;
+        
+        return this.items.find(item => 
+            item.id === itemId || 
+            (item.original_id && item.original_id === itemId)
+        );
+    }
+    
+    /**
+     * Update an item in the loaded items array
+     * @param {Object} updatedItem - Updated item data
+     */
+    updateLoadedItem(updatedItem) {
+        if (!updatedItem || !updatedItem.id) return;
+        
+        const index = this.items.findIndex(item => item.id === updatedItem.id);
+        if (index !== -1) {
+            this.items[index] = updatedItem;
+            
+            // Also update in filtered items if present
+            const filteredIndex = this.filteredItems.findIndex(item => item.id === updatedItem.id);
+            if (filteredIndex !== -1) {
+                this.filteredItems[filteredIndex] = updatedItem;
+            }
+        } else {
+            // If not found by ID, try to find by original_id
+            const originalIdIndex = this.items.findIndex(item => 
+                item.original_id && item.original_id === updatedItem.id
+            );
+            
+            if (originalIdIndex !== -1) {
+                this.items[originalIdIndex] = updatedItem;
+                
+                // Also update in filtered items if present
+                const filteredOriginalIdIndex = this.filteredItems.findIndex(item => 
+                    item.original_id && item.original_id === updatedItem.id
+                );
+                
+                if (filteredOriginalIdIndex !== -1) {
+                    this.filteredItems[filteredOriginalIdIndex] = updatedItem;
+                }
+            } else {
+                // If not found at all, add it
+                this.items.push(updatedItem);
+                this.filteredItems.push(updatedItem);
+            }
+        }
+    }
+    
+    /**
+     * Truncate text for display
+     * @param {string} text - Text to truncate
+     * @param {number} maxLength - Maximum length
+     * @returns {string} Truncated text
+     */
+    truncateText(text, maxLength = 100) {
+        if (!text) return '';
+        if (text.length <= maxLength) return text;
+        return text.substring(0, maxLength) + '...';
     }
 }
 
 // Initialize page with item type from data attribute
-async function initializeListPage() {
-    // Guard against multiple initializations using a more robust check
-    if (window.listPage && window.listPage.initialized) {
-        console.log('List page already initialized and running, skipping...');
-        return;
-    }
-
-    const container = document.querySelector('.list-container');
-    if (!container) {
-        console.error('List container not found');
-        return;
-    }
-
-    const itemType = container.querySelector('.list-header h2')?.textContent?.trim()?.replace(/s$/, '') || '';
-    if (!itemType) {
-        console.error('No item type found in header');
-        return;
-    }
-
-    try {
-        console.log(`Initializing ${itemType} list page...`);
-        
-        // Wait for API client to be available
-        let attempts = 0;
-        const maxAttempts = 50;
-        while (!window.api && attempts < maxAttempts) {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            attempts++;
-        }
-
-        if (!window.api) {
-            throw new Error('API client not found after waiting');
-        }
-
-        // Wait for API client to be initialized
-        await window.api.waitForInitialization();
-        
-        // Create list page instance only if it doesn't exist or isn't properly initialized
-        if (!window.listPage || !window.listPage.initialized) {
-            // Clean up any existing instance
-            if (window.listPage) {
-                console.log('Cleaning up existing uninitialized instance...');
-                // Remove event listeners if they exist
-                if (window.listPage.searchInput) {
-                    window.listPage.searchInput.removeEventListener('input', window.listPage._searchHandler);
-                }
-            }
-            window.listPage = new ListPage(itemType);
-        }
-    } catch (error) {
-        console.error('Error initializing list page:', error);
-        const errorContainer = document.createElement('div');
-        errorContainer.className = 'error-message fixed top-4 right-4 p-4 bg-red-100 border border-red-400 text-red-700 rounded-lg';
-        errorContainer.textContent = 'Unable to initialize list page. Please refresh the page or contact support if the problem persists.';
-        document.body.appendChild(errorContainer);
-    }
-}
-
-// Start initialization when DOM is ready - with improved guard
-if (!window.listPageInitializing) {
-    window.listPageInitializing = true;
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => {
-            initializeListPage().finally(() => {
-                window.listPageInitializing = false;
-            });
-        });
-    } else {
-        initializeListPage().finally(() => {
-            window.listPageInitializing = false;
-        });
-    }
-} 
+document.addEventListener('DOMContentLoaded', function() {
+    // This function should be implemented in specific page files
+    console.log('ListPage class loaded successfully');
+});

@@ -1,104 +1,245 @@
 {% extends "list_base.html" %}
 
-{% block database_options %}
-<option value="ncbi">NCBI</option>
-<option value="gbif">GBIF</option>
-<option value="itis">ITIS</option>
+{% block page_css %}
+<style>
+    /* Organism-specific styles */
+    .organism-property {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .organism-property:last-child {
+        border-bottom: none;
+    }
+
+    .badge-purple {
+        background-color: #f3e8ff;
+        color: #6b21a8;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .taxonomy-container {
+        font-family: monospace;
+        background-color: #f9fafb;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid #e5e7eb;
+        overflow-x: auto;
+        font-size: 0.875rem;
+    }
+</style>
 {% endblock %}
 
 {% block page_scripts %}
 <script>
+// Extend the existing ListPage class from the global scope
 class OrganismPage extends ListPage {
     constructor() {
         super('organism');
+        
+        // Add custom initialization if needed
+        console.log('OrganismPage initialized');
     }
-
-    getItemSpecificHtml(item) {
-        return `
-            <div class="mt-2 text-sm">
-                <div class="text-gray-600">${this.formatTaxonomy(item.taxonomy)}</div>
-                <div class="mt-1">
-                    <span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}
-                </div>
-            </div>
-        `;
+    
+    // Custom method to generate item card content
+    getItemCardContentHtml(item) {
+        let content = `<div class="mt-2 text-sm text-gray-600">`;
+        
+        // Add taxonomy if available
+        if (item.taxonomy) {
+            content += `<div><span class="font-medium">Taxonomy:</span> ${this.truncateText(item.taxonomy, 60)}</div>`;
+        }
+        
+        // Add common name if available
+        if (item.common_name) {
+            content += `<div><span class="font-medium">Common Name:</span> ${item.common_name}</div>`;
+        }
+        
+        // Add description if available
+        if (item.description) {
+            content += `<div class="mt-1">${this.truncateText(item.description, 100)}</div>`;
+        }
+        
+        content += `</div>`;
+        return content;
     }
-
-    getPreviewHtml(data) {
-        return `
-            <div class="p-4 border rounded-lg bg-white">
-                <h3 class="text-lg font-semibold">${data.name}</h3>
-                <div class="mt-4 text-sm">
-                    <div class="text-gray-600">${this.formatTaxonomy(data.taxonomy)}</div>
-                    ${data.common_name ? `<div class="mt-1 text-gray-500">Common name: ${data.common_name}</div>` : ''}
-                </div>
-            </div>
-        `;
+    
+    // Custom method to handle complex organism IDs
+    async fetchItemDetails(itemId) {
+        // Check if we have a complex ID format (e.g., "4:uuid:66")
+        if (itemId.includes(':')) {
+            console.log(`Handling complex ID format: ${itemId}`);
+            
+            // First try the standard API call
+            try {
+                const capitalized = this.itemType.charAt(0).toUpperCase() + this.itemType.slice(1);
+                const methodName = `get${capitalized}Details`;
+                
+                if (typeof this.api[methodName] === 'function') {
+                    return await this.api[methodName](itemId);
+                }
+            } catch (error) {
+                console.warn(`API call failed, falling back to items list: ${error.message}`);
+                // If API call fails, try to find in current items
+            }
+        }
+        
+        // Find in current items as fallback
+        const item = this.items.find(item => item.id === itemId);
+        if (!item) {
+            throw new Error(`${this.itemType} with ID ${itemId} not found in current items`);
+        }
+        
+        return item;
     }
-
-    getItemInfoHtml(item) {
+    
+    // Custom method to generate item details
+    getItemDetailHtml(item) {
         return `
             <div class="p-4">
-                <h2 class="text-2xl font-bold mb-4">${item.name}</h2>
-                ${item.common_name ? `<p class="text-gray-600 mb-6">Common name: ${item.common_name}</p>` : ''}
+                <div class="flex justify-between items-start mb-4">
+                    <h2 class="text-2xl font-bold">${this.escapeHtml(item.name || 'Unnamed Organism')}</h2>
+                    <div class="badge-purple">Organism</div>
+                </div>
                 
-                <div class="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Details</h3>
-                        <div class="space-y-2">
-                            <div class="text-gray-600">${this.formatTaxonomy(item.taxonomy)}</div>
-                            <div><span class="text-gray-500">External ID:</span> ${item.external_id || 'N/A'}</div>
+                ${item.description ? `
+                <div class="detail-section">
+                    <p class="text-gray-600">${this.escapeHtml(item.description)}</p>
+                </div>
+                ` : ''}
+                
+                <div class="detail-section">
+                    <h3 class="detail-section-title">Details</h3>
+                    <div class="bg-white rounded-lg p-4 border border-gray-200">
+                        ${item.common_name ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Common Name</span>
+                            <span class="font-medium">${item.common_name}</span>
                         </div>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Statistics</h3>
-                        <div class="space-y-2">
-                            <div><span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}</div>
-                            <div><span class="text-gray-500">Targets:</span> ${item.target_count || 0}</div>
+                        ` : ''}
+                        
+                        ${item.kingdom ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Kingdom</span>
+                            <span class="font-medium">${item.kingdom}</span>
                         </div>
+                        ` : ''}
+                        
+                        ${item.phylum ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Phylum</span>
+                            <span class="font-medium">${item.phylum}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.class_name ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Class</span>
+                            <span class="font-medium">${item.class_name}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.order ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Order</span>
+                            <span class="font-medium">${item.order}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.family ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Family</span>
+                            <span class="font-medium">${item.family}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.genus ? `
+                        <div class="organism-property">
+                            <span class="detail-label">Genus</span>
+                            <span class="font-medium">${item.genus}</span>
+                        </div>
+                        ` : ''}
+                        
+                        ${item.external_id ? `
+                        <div class="organism-property">
+                            <span class="detail-label">External ID</span>
+                            <span class="font-medium">${item.external_id}</span>
+                        </div>
+                        ` : ''}
                     </div>
                 </div>
-
-                ${item.molecules && item.molecules.length > 0 ? `
-                    <div class="mb-6">
-                        <h3 class="text-lg font-semibold mb-2">Associated Molecules</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.molecules.map(mol => `
-                                <div class="p-3 border rounded-lg">
-                                    <div class="font-medium">${mol.name}</div>
-                                    <div class="text-sm text-gray-500">${mol.type || 'Unknown type'}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
+                
+                ${item.taxonomy ? `
+                <div class="detail-section">
+                    <h3 class="detail-section-title">Taxonomy</h3>
+                    <div class="taxonomy-container">${item.taxonomy}</div>
+                </div>
                 ` : ''}
-
-                ${item.targets && item.targets.length > 0 ? `
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Associated Targets</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.targets.map(target => `
-                                <div class="p-3 border rounded-lg">
-                                    <div class="font-medium">${target.name}</div>
-                                    <div class="text-sm text-gray-500">${target.type || 'Unknown type'}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
+                
+                ${this.getMoleculesSection(item)}
             </div>
         `;
     }
-
-    formatTaxonomy(taxonomy) {
-        if (!taxonomy || !Array.isArray(taxonomy) || taxonomy.length === 0) {
-            return 'No taxonomy information available';
+    
+    getMoleculesSection(item) {
+        if (!item.molecules || item.molecules.length === 0) {
+            return '';
         }
-        return taxonomy.join(' > ');
+        
+        return `
+            <div class="detail-section">
+                <h3 class="detail-section-title">Associated Molecules</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    ${item.molecules.map(mol => `
+                        <div class="bg-white rounded-lg p-3 border border-gray-200 hover:shadow-md transition-shadow">
+                            <div class="font-medium">${this.escapeHtml(mol.name)}</div>
+                            ${mol.formula ? `<div class="text-sm text-gray-600">Formula: ${mol.formula}</div>` : ''}
+                            ${mol.relationship_type ? `<div class="text-xs bg-blue-100 text-blue-800 rounded px-2 py-0.5 mt-1 inline-block">${mol.relationship_type}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
     }
 }
 
-// Initialize the page
-window.organismPage = new OrganismPage();
+// Wait for API initialization before creating the page instance
+document.addEventListener('DOMContentLoaded', () => {
+    // Check if API exists
+    const waitForAPI = setInterval(() => {
+        if (window.api) {
+            clearInterval(waitForAPI);
+            
+            // Now wait for API initialization
+            if (typeof window.api.waitForInitialization === 'function') {
+                window.api.waitForInitialization()
+                    .then(() => {
+                        console.log('API initialized, creating OrganismPage');
+                        window.organismPage = new OrganismPage();
+                    })
+                    .catch(error => {
+                        console.error('API initialization failed:', error);
+                    });
+            } else {
+                // If no waitForInitialization method, create page with retry mechanism
+                console.log('Creating OrganismPage (without waiting for API)');
+                window.organismPage = new OrganismPage();
+            }
+        }
+    }, 100);
+    
+    // Safety timeout after 10 seconds
+    setTimeout(() => {
+        clearInterval(waitForAPI);
+        if (!window.organismPage) {
+            console.error('Failed to initialize OrganismPage after timeout');
+        }
+    }, 10000);
+});
 </script>
 {% endblock %} 

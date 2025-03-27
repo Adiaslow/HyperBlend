@@ -1,104 +1,87 @@
 {% extends "list_base.html" %}
 
-{% block database_options %}
-<option value="uniprot">UniProt</option>
-<option value="chembl">ChEMBL</option>
-<option value="drugbank">DrugBank</option>
+{% block page_css %}
+<style>
+    /* Target-specific styles */
+    .target-property {
+        display: flex;
+        justify-content: space-between;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid #e5e7eb;
+    }
+
+    .target-property:last-child {
+        border-bottom: none;
+    }
+
+    .badge-green {
+        background-color: #dcfce7;
+        color: #166534;
+        padding: 0.25rem 0.5rem;
+        border-radius: 0.25rem;
+        font-size: 0.75rem;
+        font-weight: 600;
+    }
+    
+    .sequence-container {
+        font-family: monospace;
+        background-color: #f9fafb;
+        padding: 0.75rem;
+        border-radius: 0.375rem;
+        border: 1px solid #e5e7eb;
+        overflow-x: auto;
+        font-size: 0.875rem;
+        line-height: 1.4;
+        max-height: 200px;
+        overflow-y: auto;
+    }
+</style>
 {% endblock %}
 
-{% block page_scripts %}
+{% block form_fields %}
+<div class="form-row">
+    <div class="form-group">
+        <label for="targetName" class="form-label">Name</label>
+        <input type="text" id="targetName" name="name" class="form-input" placeholder="e.g., Cytochrome P450">
+    </div>
+    <div class="form-group">
+        <label for="targetType" class="form-label">Type</label>
+        <input type="text" id="targetType" name="type" class="form-input" placeholder="e.g., Enzyme">
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group">
+        <label for="targetOrganism" class="form-label">Organism</label>
+        <input type="text" id="targetOrganism" name="organism" class="form-input" placeholder="e.g., Human">
+    </div>
+    <div class="form-group">
+        <label for="targetGeneName" class="form-label">Gene Name</label>
+        <input type="text" id="targetGeneName" name="gene_name" class="form-input" placeholder="e.g., CYP3A4">
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group wide">
+        <label for="targetExternalId" class="form-label">External ID</label>
+        <input type="text" id="targetExternalId" name="external_id" class="form-input" placeholder="e.g., P08684">
+    </div>
+</div>
+<div class="form-row">
+    <div class="form-group wide">
+        <label for="targetSequence" class="form-label">Sequence</label>
+        <textarea id="targetSequence" name="sequence" class="form-textarea" rows="4" placeholder="Protein or nucleotide sequence..."></textarea>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/targets.js') }}"></script>
 <script>
-class TargetPage extends ListPage {
-    constructor() {
-        super('target');
-    }
-
-    getItemSpecificHtml(item) {
-        return `
-            <div class="mt-2 text-sm">
-                <span class="text-gray-500">Type:</span> ${item.type || 'Unknown'}
-                <span class="text-gray-500 ml-4">Organism:</span> ${item.organism || 'Unknown'}
-                <div class="mt-1">
-                    <span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}
-                </div>
-            </div>
-        `;
-    }
-
-    getPreviewHtml(data) {
-        return `
-            <div class="p-4 border rounded-lg bg-white">
-                <h3 class="text-lg font-semibold">${data.name}</h3>
-                ${data.description ? `<p class="text-gray-600 mt-2">${data.description}</p>` : ''}
-                <div class="mt-4 grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                        <span class="text-gray-500">Type:</span> ${data.type || 'Unknown'}
-                    </div>
-                    <div>
-                        <span class="text-gray-500">Organism:</span> ${data.organism || 'Unknown'}
-                    </div>
-                </div>
-            </div>
-        `;
-    }
-
-    getItemInfoHtml(item) {
-        return `
-            <div class="p-4">
-                <h2 class="text-2xl font-bold mb-4">${item.name}</h2>
-                ${item.description ? `<p class="text-gray-600 mb-6">${item.description}</p>` : ''}
-                
-                <div class="grid grid-cols-2 gap-6 mb-6">
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Details</h3>
-                        <div class="space-y-2">
-                            <div><span class="text-gray-500">Type:</span> ${item.type || 'Unknown'}</div>
-                            <div><span class="text-gray-500">Organism:</span> ${item.organism || 'Unknown'}</div>
-                            <div><span class="text-gray-500">External ID:</span> ${item.external_id || 'N/A'}</div>
-                        </div>
-                    </div>
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Statistics</h3>
-                        <div class="space-y-2">
-                            <div><span class="text-gray-500">Molecules:</span> ${item.molecule_count || 0}</div>
-                            <div><span class="text-gray-500">Effects:</span> ${item.effect_count || 0}</div>
-                        </div>
-                    </div>
-                </div>
-
-                ${item.molecules && item.molecules.length > 0 ? `
-                    <div class="mb-6">
-                        <h3 class="text-lg font-semibold mb-2">Associated Molecules</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            ${item.molecules.map(mol => `
-                                <div class="p-3 border rounded-lg">
-                                    <div class="font-medium">${mol.name}</div>
-                                    <div class="text-sm text-gray-500">${mol.type || 'Unknown type'}</div>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-
-                ${item.effects && item.effects.length > 0 ? `
-                    <div>
-                        <h3 class="text-lg font-semibold mb-2">Known Effects</h3>
-                        <div class="space-y-2">
-                            ${item.effects.map(effect => `
-                                <div class="p-3 border rounded-lg">
-                                    <div class="font-medium">${effect.name}</div>
-                                    ${effect.description ? `<div class="text-sm text-gray-600 mt-1">${effect.description}</div>` : ''}
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-                ` : ''}
-            </div>
-        `;
-    }
-}
-
-// Initialize the page
-window.targetPage = new TargetPage();
+    document.addEventListener('DOMContentLoaded', function() {
+        if (typeof TargetPage !== 'undefined') {
+            window.targetPage = new TargetPage();
+        } else {
+            console.error('TargetPage class not loaded. Check script ordering.');
+        }
+    });
 </script>
 {% endblock %} 

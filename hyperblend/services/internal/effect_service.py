@@ -1,54 +1,28 @@
-import json
-import os
+"""Service for handling effect-related operations."""
+
+import logging
 from typing import List, Optional, Dict, Any
 from hyperblend.app.web.core.exceptions import ResourceNotFoundError, ValidationError
-import logging
+from hyperblend.repository.effect_repository import EffectRepository
 
 logger = logging.getLogger(__name__)
 
+
 class EffectService:
-    """Service for handling effect-related operations using JSON file."""
+    """Service for handling effect-related operations."""
 
-    def __init__(self):
-        """Initialize the effect service."""
-        self.effects_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 
-                                       'references', 'effects.json')
-        self._effects_cache = None
+    def __init__(
+        self, graph=None, effect_repository: Optional[EffectRepository] = None
+    ):
+        """
+        Initialize the effect service.
 
-    def _load_effects(self) -> Dict[str, List[Dict[str, str]]]:
-        """Load effects from JSON file."""
-        if self._effects_cache is None:
-            try:
-                with open(self.effects_file, 'r') as f:
-                    self._effects_cache = json.load(f)
-            except Exception as e:
-                logger.error(f"Error loading effects file: {str(e)}")
-                raise
-        return self._effects_cache
-
-    def _flatten_effects(self) -> List[Dict[str, Any]]:
-        """Flatten effects from categories into a single list and sort alphabetically."""
-        effects = []
-        data = self._load_effects()
-        
-        for category, effect_list in data.items():
-            # Format the category for display
-            display_category = category.replace('_', ' ').title()
-            # Get the main category type (first word)
-            badge_category = display_category.split()[0]
-            
-            for effect_dict in effect_list:
-                for name, description in effect_dict.items():
-                    effects.append({
-                        'id': len(effects),
-                        'name': name,
-                        'description': description,
-                        'category': display_category,
-                        'type': badge_category  # Changed from badge_type to type to match frontend expectations
-                    })
-        
-        # Sort effects alphabetically by name
-        return sorted(effects, key=lambda x: x['name'].lower())
+        Args:
+            graph: Neo4j graph database connection (optional)
+            effect_repository: Repository for effect operations (optional)
+        """
+        self.logger = logging.getLogger(__name__)
+        self.effect_repository = effect_repository or EffectRepository(graph=graph)
 
     def get_effect(self, effect_id: int) -> Optional[Dict[str, Any]]:
         """
@@ -59,15 +33,19 @@ class EffectService:
 
         Returns:
             Dictionary containing effect details
+
+        Raises:
+            ResourceNotFoundError: If effect not found
         """
         try:
-            effects = self._flatten_effects()
-            effect = next((e for e in effects if e['id'] == effect_id), None)
+            effect = self.effect_repository.get_effect(effect_id)
             if not effect:
                 raise ResourceNotFoundError(f"Effect with ID {effect_id} not found")
             return effect
+        except ResourceNotFoundError:
+            raise
         except Exception as e:
-            logger.error(f"Error getting effect {effect_id}: {str(e)}")
+            self.logger.error(f"Error getting effect {effect_id}: {str(e)}")
             raise
 
     def get_all_effects(self) -> List[Dict[str, Any]]:
@@ -78,9 +56,9 @@ class EffectService:
             List of dictionaries containing effect details
         """
         try:
-            return self._flatten_effects()
+            return self.effect_repository.get_all_effects()
         except Exception as e:
-            logger.error(f"Error getting all effects: {str(e)}")
+            self.logger.error(f"Error getting all effects: {str(e)}")
             raise
 
     def search_effects(self, query: str) -> List[Dict[str, Any]]:
@@ -94,16 +72,9 @@ class EffectService:
             List of dictionaries containing matching effect details
         """
         try:
-            effects = self._flatten_effects()
-            query = query.lower()
-            return [
-                effect for effect in effects
-                if query in effect['name'].lower() or
-                   query in effect['description'].lower() or
-                   query in effect['category'].lower()
-            ]
+            return self.effect_repository.search_effects(query)
         except Exception as e:
-            logger.error(f"Error searching effects with query {query}: {str(e)}")
+            self.logger.error(f"Error searching effects with query {query}: {str(e)}")
             raise
 
     def create_effect(self, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -122,36 +93,21 @@ class EffectService:
         Raises:
             ValidationError: If required fields are missing or invalid
         """
-        required_fields = ['name']
+        # Validate required fields
+        required_fields = ["name"]
         for field in required_fields:
             if field not in data or not data[field]:
                 raise ValidationError(f"Missing required field: {field}")
 
         try:
-            cypher_query = """
-            CREATE (e:Effect {
-                name: $name,
-                description: $description,
-                category: $category,
-                created_at: datetime(),
-                updated_at: datetime()
-            })
-            RETURN {
-                id: toString(elementId(e)),
-                name: e.name,
-                description: e.description,
-                category: e.category
-            } as effect
-            """
-            result = self.graph.run(cypher_query, 
-                name=data['name'],
-                description=data.get('description', ''),
-                category=data.get('category', '')
-            ).data()
-            
-            return result[0]['effect']
+            effect = self.effect_repository.create_effect(data)
+            if not effect:
+                raise ValidationError("Failed to create effect")
+            return effect
+        except ValidationError:
+            raise
         except Exception as e:
-            logger.error(f"Error creating effect: {str(e)}")
+            self.logger.error(f"Error creating effect: {str(e)}")
             raise
 
     def update_effect(self, effect_id: str, data: Dict[str, Any]) -> Dict[str, Any]:
@@ -173,41 +129,19 @@ class EffectService:
         """
         try:
             # First check if effect exists
-            if not self.get_effect(effect_id):
+            if not self.effect_repository.get_effect(int(effect_id)):
                 raise ResourceNotFoundError(f"Effect with ID {effect_id} not found")
 
-            # Build update query dynamically based on provided fields
-            update_parts = []
-            params = {'effect_id': int(effect_id)}
-            
-            for field in ['name', 'description', 'category']:
-                if field in data and data[field] is not None:
-                    update_parts.append(f"e.{field} = ${field}")
-                    params[field] = data[field]
-            
-            if not update_parts:
-                return self.get_effect(effect_id)  # No updates needed
-            
-            update_parts.append("e.updated_at = datetime()")
-            
-            cypher_query = f"""
-            MATCH (e:Effect)
-            WHERE elementId(e) = $effect_id
-            SET {', '.join(update_parts)}
-            RETURN {{
-                id: toString(elementId(e)),
-                name: e.name,
-                description: e.description,
-                category: e.category
-            }} as effect
-            """
-            
-            result = self.graph.run(cypher_query, **params).data()
-            return result[0]['effect']
+            effect = self.effect_repository.update_effect(effect_id, data)
+            if not effect:
+                raise ValidationError("Failed to update effect")
+            return effect
         except ResourceNotFoundError:
             raise
+        except ValidationError:
+            raise
         except Exception as e:
-            logger.error(f"Error updating effect {effect_id}: {str(e)}")
+            self.logger.error(f"Error updating effect {effect_id}: {str(e)}")
             raise
 
     def delete_effect(self, effect_id: str) -> bool:
@@ -218,26 +152,22 @@ class EffectService:
             effect_id: ID of the effect to delete
 
         Returns:
-            True if effect was deleted, False otherwise
+            True if successful
 
         Raises:
             ResourceNotFoundError: If effect not found
         """
         try:
             # First check if effect exists
-            if not self.get_effect(effect_id):
+            if not self.effect_repository.get_effect(int(effect_id)):
                 raise ResourceNotFoundError(f"Effect with ID {effect_id} not found")
 
-            cypher_query = """
-            MATCH (e:Effect)
-            WHERE elementId(e) = $effect_id
-            DETACH DELETE e
-            """
-            
-            self.graph.run(cypher_query, effect_id=int(effect_id))
+            success = self.effect_repository.delete_effect(effect_id)
+            if not success:
+                raise Exception("Failed to delete effect")
             return True
         except ResourceNotFoundError:
             raise
         except Exception as e:
-            logger.error(f"Error deleting effect {effect_id}: {str(e)}")
-            raise 
+            self.logger.error(f"Error deleting effect {effect_id}: {str(e)}")
+            raise

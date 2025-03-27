@@ -269,6 +269,7 @@ class ChEMBLService(BaseExternalService):
                 inchikey=structures.get("standard_inchi_key", ""),
                 pubchem_cid=None,  # Would need to cross-reference with PubChem
                 chembl_id=chembl_data.get("molecule_chembl_id", ""),
+                drugbank_id=None,  # Not available from ChEMBL directly
                 logp=properties.get("alogp", 0.0),
                 polar_surface_area=properties.get("psa", 0.0),
                 known_activities=[],  # Would need additional processing
@@ -280,3 +281,220 @@ class ChEMBLService(BaseExternalService):
             self.logger.error(f"Error converting ChEMBL data to molecule: {str(e)}")
             self.logger.debug(f"Problematic data: {chembl_data}")
             return None
+
+    def get_molecule_by_inchikey(self, inchikey: str) -> Optional[Molecule]:
+        """
+        Get molecule details by InChI Key from ChEMBL.
+
+        Args:
+            inchikey: InChI Key of the molecule
+
+        Returns:
+            Optional[Molecule]: Molecule if found, None otherwise
+        """
+        try:
+            # Search by InChI Key
+            results = self.molecule_client.filter(
+                molecule_structures__standard_inchi_key__exact=inchikey
+            ).only(
+                "molecule_chembl_id",
+                "pref_name",
+                "molecule_synonyms",
+                "molecule_properties",
+                "molecule_structures",
+            )
+
+            if results and len(results) > 0:
+                # Take the first result
+                result = results[0]
+                molecule = self._convert_to_molecule(result)
+                if molecule:
+                    # Store in database
+                    self.db_manager.create_or_update_molecule(
+                        molecule=molecule, source="ChEMBL"
+                    )
+                    return molecule
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Error getting molecule by InChI Key: {str(e)}")
+            return None
+
+    def search_molecule_by_smiles(self, smiles: str) -> Optional[Molecule]:
+        """
+        Search for molecule by SMILES string in ChEMBL.
+
+        Args:
+            smiles: SMILES string of the molecule
+
+        Returns:
+            Optional[Molecule]: Molecule if found, None otherwise
+        """
+        try:
+            # Search by canonical SMILES
+            results = self.molecule_client.filter(
+                molecule_structures__canonical_smiles__exact=smiles
+            ).only(
+                "molecule_chembl_id",
+                "pref_name",
+                "molecule_synonyms",
+                "molecule_properties",
+                "molecule_structures",
+            )
+
+            # If no results, try with less exact matching
+            if not results:
+                # This is more permissive but might be less accurate
+                results = self.molecule_client.filter(
+                    molecule_structures__canonical_smiles__icontains=smiles
+                ).only(
+                    "molecule_chembl_id",
+                    "pref_name",
+                    "molecule_synonyms",
+                    "molecule_properties",
+                    "molecule_structures",
+                )[
+                    :1
+                ]
+
+            if results and len(results) > 0:
+                # Take the first result
+                result = results[0]
+                molecule = self._convert_to_molecule(result)
+                if molecule:
+                    # Store in database
+                    self.db_manager.create_or_update_molecule(
+                        molecule=molecule, source="ChEMBL"
+                    )
+                    return molecule
+
+            return None
+
+        except Exception as e:
+            self.logger.error(f"Error searching molecule by SMILES: {str(e)}")
+            return None
+
+    def enrich_molecule(self, identifiers):
+        """
+        Enrich a molecule with data from ChEMBL based on provided identifiers.
+
+        Args:
+            identifiers (dict): Dictionary of identifiers with keys like 'inchikey', 'smiles', 'name'
+
+        Returns:
+            dict: Enriched molecule data or None if no data found
+        """
+        self.logger.info(f"Enriching molecule with identifiers: {identifiers}")
+
+        molecule = None
+
+        # Try ChEMBL ID first (most reliable)
+        if identifiers.get("chembl_id"):
+            try:
+                self.logger.info(f"Searching by ChEMBL ID: {identifiers['chembl_id']}")
+                molecule = self.get_molecule_by_chembl_id(identifiers["chembl_id"])
+                if molecule:
+                    self.logger.info("Found molecule by ChEMBL ID")
+            except Exception as e:
+                self.logger.warning(f"Error finding by ChEMBL ID: {str(e)}")
+
+        # Try to get molecule by InChI Key (also very specific)
+        if not molecule and identifiers.get("inchikey"):
+            try:
+                self.logger.info(f"Searching by InChI Key: {identifiers['inchikey']}")
+                molecule = self.get_molecule_by_inchikey(identifiers["inchikey"])
+                if molecule:
+                    self.logger.info("Found molecule by InChI Key")
+            except Exception as e:
+                self.logger.warning(f"Error finding by InChI Key: {str(e)}")
+
+        # If not found, try SMILES
+        if not molecule and identifiers.get("smiles"):
+            try:
+                self.logger.info(f"Searching by SMILES: {identifiers['smiles']}")
+                molecule = self.search_molecule_by_smiles(identifiers["smiles"])
+                if molecule:
+                    self.logger.info("Found molecule by SMILES")
+            except Exception as e:
+                self.logger.warning(f"Error finding by SMILES: {str(e)}")
+
+        # If still not found, try by name
+        if not molecule and identifiers.get("name"):
+            try:
+                name = identifiers["name"]
+                self.logger.info(f"Searching by name: {name}")
+
+                # Try known specific drug names with direct ChEMBL ID mapping
+                known_substances = {
+                    "mescaline": "CHEMBL8857",
+                    "lsd": "CHEMBL18597",
+                    "psilocybin": "CHEMBL9237",
+                    "dmt": "CHEMBL1336",
+                    "mdma": "CHEMBL1833",
+                    "cocaine": "CHEMBL370847",
+                    "morphine": "CHEMBL70",
+                    "caffeine": "CHEMBL113",
+                    "nicotine": "CHEMBL3",
+                    "thc": "CHEMBL465",
+                    "ketamine": "CHEMBL658",
+                }
+
+                # Normalize name (lowercase, remove spaces)
+                normalized_name = name.lower().strip()
+
+                # Check if this is a known substance
+                if normalized_name in known_substances:
+                    chembl_id = known_substances[normalized_name]
+                    self.logger.info(
+                        f"Found known substance match for '{normalized_name}' with ChEMBL ID {chembl_id}"
+                    )
+                    try:
+                        molecule = self.get_molecule_by_chembl_id(chembl_id)
+                        if molecule:
+                            self.logger.info(
+                                f"Successfully retrieved molecule for known substance '{normalized_name}'"
+                            )
+                    except Exception as e:
+                        self.logger.warning(
+                            f"Error retrieving known substance: {str(e)}"
+                        )
+
+                # If still not found, try normal name search
+                if not molecule:
+                    self.logger.info(f"Trying regular name search for: {name}")
+                    molecules = self.search_molecule_by_name(name)
+                    if molecules and len(molecules) > 0:
+                        molecule = molecules[0]
+                        self.logger.info("Found molecule by name search")
+            except Exception as e:
+                self.logger.warning(f"Error finding by name: {str(e)}")
+
+        if not molecule:
+            self.logger.warning("No molecule found with provided identifiers")
+            return None
+
+        # Convert to dictionary format
+        if not isinstance(molecule, dict):
+            try:
+                molecule_dict = molecule.model_dump()
+            except AttributeError:
+                try:
+                    molecule_dict = molecule.__dict__
+                except AttributeError:
+                    self.logger.error("Failed to convert molecule to dictionary")
+                    return None
+        else:
+            molecule_dict = molecule
+
+        # Prepare the enriched data structure
+        enriched = {
+            "properties": molecule_dict,
+            "identifiers": {
+                "inchikey": molecule_dict.get("inchikey"),
+                "smiles": molecule_dict.get("smiles"),
+                "chembl_id": molecule_dict.get("chembl_id"),
+            },
+        }
+
+        return enriched

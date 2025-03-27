@@ -90,6 +90,79 @@ class Neo4jConnection:
                 return False
         return False
 
+    def get_database_stats(self) -> Dict[str, Any]:
+        """
+        Get database statistics including node and relationship counts.
+
+        Returns:
+            Dict with database statistics
+        """
+        try:
+            if not self.driver:
+                self.connect()
+
+            with self.driver.session() as session:
+                # Query to get node counts by label
+                node_counts_query = """
+                MATCH (n)
+                RETURN labels(n) AS label, count(n) AS count
+                ORDER BY count DESC
+                """
+                node_results = session.run(node_counts_query).data()
+
+                # Query to get relationship counts by type
+                rel_counts_query = """
+                MATCH ()-[r]->()
+                RETURN type(r) AS type, count(r) AS count
+                ORDER BY count DESC
+                """
+                rel_results = session.run(rel_counts_query).data()
+
+                # Query to get database size and other metrics
+                db_info_query = """
+                CALL dbms.components() YIELD name, versions
+                RETURN name, versions[0] as version
+                """
+                db_info = session.run(db_info_query).data()
+
+                # Format the results
+                node_counts = {}
+                for record in node_results:
+                    labels = record.get("label")
+                    if labels and len(labels) > 0:
+                        label = labels[0]  # Use the first label for simplicity
+                        node_counts[label] = record.get("count", 0)
+
+                rel_counts = {}
+                for record in rel_results:
+                    rel_type = record.get("type")
+                    if rel_type:
+                        rel_counts[rel_type] = record.get("count", 0)
+
+                db_version = db_info[0]["version"] if db_info else "Unknown"
+
+                # Calculate total counts
+                total_nodes = sum(node_counts.values())
+                total_relationships = sum(rel_counts.values())
+
+                return {
+                    "status": "connected",
+                    "database": {
+                        "name": db_info[0]["name"] if db_info else "Neo4j",
+                        "version": db_version,
+                    },
+                    "nodes": {"total": total_nodes, "byType": node_counts},
+                    "relationships": {
+                        "total": total_relationships,
+                        "byType": rel_counts,
+                    },
+                    "timestamp": time.time(),
+                }
+
+        except Exception as e:
+            self.logger.error(f"Error retrieving database stats: {str(e)}")
+            return {"status": "error", "error": str(e), "timestamp": time.time()}
+
     def remove_duplicates(self):
         """Remove duplicate nodes from the database."""
         with self.driver.session() as session:

@@ -1,0 +1,107 @@
+/* hyperblend/app/web/static/css/viewport.css */
+
+/* Viewport constraints for consistent page layout */
+
+html, body {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: auto; /* Allow scrolling on the page */
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+}
+
+.main-container {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    overflow: hidden;
+    /* Don't set a fixed height - let it flex to fill the space */
+}
+
+.content-area {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* Three-column layout */
+.three-column-layout {
+    display: flex;
+    width: 100%;
+    flex: 1;
+    overflow: hidden;
+}
+
+.column {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.column-form {
+    flex: 0 0 300px;
+    border-right: 1px solid #e5e7eb;
+    overflow-y: auto;
+}
+
+.column-list {
+    flex: 0 0 350px;
+    border-right: 1px solid #e5e7eb;
+    overflow-y: auto;
+}
+
+.column-details {
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* Footer positioning */
+.footer {
+    width: 100%;
+    background-color: #2c3e50;
+    color: #fff;
+    border-top: 1px solid #1a2530;
+    padding: 1rem 0;
+    z-index: 10;
+    flex-shrink: 0; /* Prevent footer from shrinking */
+}
+
+.footer .container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1rem;
+    text-align: center;
+}
+
+/* Responsive adjustments */
+@media (max-width: 1200px) {
+    .three-column-layout {
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    
+    .column {
+        flex: 0 0 auto;
+        max-height: none;
+    }
+    
+    .column-form, 
+    .column-list {
+        border-right: none;
+        border-bottom: 1px solid #e5e7eb;
+        width: 100%;
+    }
+} 

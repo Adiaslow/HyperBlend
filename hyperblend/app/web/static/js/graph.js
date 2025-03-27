@@ -213,6 +213,7 @@ class GraphVisualization {
                 .on('end', this.handleDragEnd))
             .on('click', this.handleNodeClick);
 
+        // Add circle to each node group
         const nodeElements = nodeGroup.append('circle')
             .attr('r', d => d.width / 2)
             .attr('fill', d => this.getNodeColor(d.type));
@@ -232,12 +233,18 @@ class GraphVisualization {
         const labels = nodeGroup.append('g')
             .attr('class', 'label');
 
+        // Calculate text width for centering
+        const tempText = labels.append('text')
+            .text(d => d.name || 'Unknown')
+            .attr('font-size', '12px')
+            .style('visibility', 'hidden');
+
         // Add white background for better readability
         labels.append('text')
             .text(d => d.name || 'Unknown')
             .attr('font-size', '12px')
-            .attr('dx', 8)
-            .attr('dy', 3)
+            .attr('text-anchor', 'middle')
+            .attr('dy', d => d.width / 2 + 16)  // Position below node with padding
             .attr('stroke', 'white')
             .attr('stroke-width', 3)
             .attr('stroke-opacity', 0.8);
@@ -246,23 +253,34 @@ class GraphVisualization {
         labels.append('text')
             .text(d => d.name || 'Unknown')
             .attr('font-size', '12px')
-            .attr('dx', 8)
-            .attr('dy', 3);
+            .attr('text-anchor', 'middle')  // Center the text
+            .attr('dy', d => d.width / 2 + 16);  // Position below node with padding
 
-        // D3 force simulation
+        // Remove the temporary text element
+        tempText.remove();
+
+        // Update the simulation
         this.layout
             .nodes(nodes)
-            .force('link').links(links);
+            .force('link')
+            .links(links);
 
         // Set up the tick handler
         this.layout.on('tick', () => {
-            linkElements.select('line')
+            // Update link positions
+            linkElements.selectAll('line')
                 .attr('x1', d => d.source.x)
                 .attr('y1', d => d.source.y)
                 .attr('x2', d => d.target.x)
                 .attr('y2', d => d.target.y);
 
-            nodeGroup
+            // Update node positions
+            nodeElements
+                .attr('cx', d => d.x)
+                .attr('cy', d => d.y);
+
+            // Update label positions
+            labels
                 .attr('transform', d => `translate(${d.x},${d.y})`);
         });
 

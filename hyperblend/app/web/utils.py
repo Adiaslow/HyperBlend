@@ -5,6 +5,7 @@ import time
 
 logger = logging.getLogger(__name__)
 
+
 def get_neo4j_connection():
     """Get Neo4j graph connection with retries and exponential backoff."""
     max_retries = 3
@@ -44,4 +45,88 @@ def get_neo4j_connection():
                     "4. Neo4j server logs for any issues"
                 )
                 return None
-    return None 
+    return None
+
+
+def get_molecule_repository():
+    """Get the MoleculeRepository from Flask global context or create a new one."""
+    from flask import g
+    from hyperblend.repository.molecule_repository import MoleculeRepository
+
+    if hasattr(g, "molecule_repository"):
+        return g.molecule_repository
+
+    # If no repository in context, create one
+    graph = get_neo4j_connection()
+    if not graph:
+        logger.error("Unable to establish database connection for MoleculeRepository")
+        return None
+
+    try:
+        return MoleculeRepository(graph)
+    except Exception as e:
+        logger.error(f"Error creating MoleculeRepository: {str(e)}")
+        return None
+
+
+def get_target_repository():
+    """Get the TargetRepository from Flask global context or create a new one."""
+    from flask import g
+    from hyperblend.repository.target_repository import TargetRepository
+
+    if hasattr(g, "target_repository"):
+        return g.target_repository
+
+    # If no repository in context, create one
+    graph = get_neo4j_connection()
+    if not graph:
+        logger.error("Unable to establish database connection for TargetRepository")
+        return None
+
+    try:
+        return TargetRepository(graph)
+    except Exception as e:
+        logger.error(f"Error creating TargetRepository: {str(e)}")
+        return None
+
+
+def get_organism_repository():
+    """Get the OrganismRepository from Flask global context or create a new one."""
+    from flask import g
+    from hyperblend.repository.organism_repository import OrganismRepository
+
+    if hasattr(g, "organism_repository"):
+        return g.organism_repository
+
+    # If no repository in context, create one
+    graph = get_neo4j_connection()
+    if not graph:
+        logger.error("Unable to establish database connection for OrganismRepository")
+        return None
+
+    try:
+        return OrganismRepository(graph)
+    except Exception as e:
+        logger.error(f"Error creating OrganismRepository: {str(e)}")
+        return None
+
+
+def get_effect_repository():
+    """Get the EffectRepository from Flask global context or create a new one."""
+    from flask import g
+    from hyperblend.repository.effect_repository import EffectRepository
+
+    if hasattr(g, "effect_repository"):
+        return g.effect_repository
+
+    # If no repository in context, create one
+    graph = get_neo4j_connection()
+    if not graph:
+        logger.error("Unable to establish database connection for EffectRepository")
+        return None
+
+    try:
+        return EffectRepository(graph)
+    except Exception as e:
+        logger.error(f"Error creating EffectRepository: {str(e)}")
+        return None

@@ -43,19 +43,41 @@ class CoconutService(BaseExternalService):
         """
         try:
             auth_payload = {"email": email, "password": password}
+            self.logger.info(
+                f"Attempting to authenticate with COCONUT API using email: {email}"
+            )
             response = self.session.post(
                 f"{self.BASE_URL}/auth/login", json=auth_payload
             )
-            response.raise_for_status()
+
+            # Log response status and headers for debugging
+            self.logger.debug(f"Authentication response status: {response.status_code}")
+            self.logger.debug(f"Authentication response headers: {response.headers}")
+
+            # Log response body if not successful
+            if response.status_code != 200:
+                self.logger.error(
+                    f"Authentication failed with status {response.status_code}"
+                )
+                self.logger.error(f"Response body: {response.text}")
+                response.raise_for_status()
+
             data = response.json()
+            self.logger.debug(f"Authentication response data: {data}")
 
             # Update session headers with the access token
             token = data.get("access_token")
             if token:
                 self.session.headers.update({"Authorization": f"Bearer {token}"})
+                self.logger.info("Successfully authenticated with COCONUT API")
             else:
-                raise ValueError("No access token received")
+                error_msg = "No access token received in authentication response"
+                self.logger.error(error_msg)
+                raise ValueError(error_msg)
 
+        except requests.exceptions.RequestException as e:
+            self.logger.error(f"Network error during authentication: {str(e)}")
+            raise
         except Exception as e:
             self.logger.error(f"Authentication failed: {str(e)}")
             raise
@@ -75,47 +97,45 @@ class CoconutService(BaseExternalService):
         """
         try:
             search_payload = {
-                "search": {
-                    "filters": [
-                        {"field": "name", "operator": "like", "value": f"%{name}%"}
-                    ],
-                    "selects": [
-                        {"field": "standard_inchi"},
-                        {"field": "standard_inchi_key"},
-                        {"field": "canonical_smiles"},
-                        {"field": "sugar_free_smiles"},
-                        {"field": "identifier"},
-                        {"field": "name"},
-                        {"field": "cas"},
-                        {"field": "iupac_name"},
-                        {"field": "murko_framework"},
-                        {"field": "structural_comments"},
-                        {"field": "annotation_level"},
-                        {"field": "has_stereo"},
-                        {"field": "is_parent"},
-                        {"field": "synonyms"},  # Add synonyms field
-                    ],
-                    "includes": [
-                        {
-                            "relation": "properties",
-                            "selects": [
-                                {"field": "molecular_weight"},
-                                {"field": "exact_molecular_weight"},
-                                {"field": "molecular_formula"},
-                                {"field": "alogp"},
-                                {"field": "topological_polar_surface_area"},
-                                {"field": "rotatable_bond_count"},
-                                {"field": "hydrogen_bond_acceptors"},
-                                {"field": "hydrogen_bond_donors"},
-                                {"field": "aromatic_rings_count"},
-                                {"field": "qed_drug_likeliness"},
-                                {"field": "formal_charge"},
-                            ],
-                        }
-                    ],
-                    "page": 1,
-                    "limit": max_results,
-                }
+                "filters": [
+                    {"field": "name", "operator": "like", "value": f"%{name}%"}
+                ],
+                "selects": [
+                    {"field": "standard_inchi"},
+                    {"field": "standard_inchi_key"},
+                    {"field": "canonical_smiles"},
+                    {"field": "sugar_free_smiles"},
+                    {"field": "identifier"},
+                    {"field": "name"},
+                    {"field": "cas"},
+                    {"field": "iupac_name"},
+                    {"field": "murko_framework"},
+                    {"field": "structural_comments"},
+                    {"field": "annotation_level"},
+                    {"field": "has_stereo"},
+                    {"field": "is_parent"},
+                    {"field": "synonyms"},  # Add synonyms field
+                ],
+                "includes": [
+                    {
+                        "relation": "properties",
+                        "selects": [
+                            {"field": "molecular_weight"},
+                            {"field": "exact_molecular_weight"},
+                            {"field": "molecular_formula"},
+                            {"field": "alogp"},
+                            {"field": "topological_polar_surface_area"},
+                            {"field": "rotatable_bond_count"},
+                            {"field": "hydrogen_bond_acceptors"},
+                            {"field": "hydrogen_bond_donors"},
+                            {"field": "aromatic_rings_count"},
+                            {"field": "qed_drug_likeliness"},
+                            {"field": "formal_charge"},
+                        ],
+                    }
+                ],
+                "page": 1,
+                "limit": max_results,
             }
 
             response = self.session.post(
@@ -136,7 +156,7 @@ class CoconutService(BaseExternalService):
                         synonyms.append(mol_data["iupac_name"])
 
                     # Store in database
-                    db_molecule = self.db_manager.add_or_update_molecule(
+                    db_molecule = self.db_manager.create_or_update_molecule(
                         molecule=molecule, source="COCONUT", synonyms=synonyms
                     )
                     molecules.append(molecule)
@@ -159,25 +179,23 @@ class CoconutService(BaseExternalService):
         """
         try:
             search_payload = {
-                "search": {
-                    "filters": [
-                        {"field": "canonical_smiles", "operator": "=", "value": smiles}
-                    ],
-                    "selects": [
-                        {"field": "standard_inchi"},
-                        {"field": "standard_inchi_key"},
-                        {"field": "canonical_smiles"},
-                        {"field": "identifier"},
-                        {"field": "name"},
-                        {"field": "cas"},
-                        {"field": "iupac_name"},
-                        {"field": "structural_comments"},
-                        {"field": "annotation_level"},
-                    ],
-                    "includes": [{"relation": "properties"}],
-                    "page": 1,
-                    "limit": 10,
-                }
+                "filters": [
+                    {"field": "canonical_smiles", "operator": "=", "value": smiles}
+                ],
+                "selects": [
+                    {"field": "standard_inchi"},
+                    {"field": "standard_inchi_key"},
+                    {"field": "canonical_smiles"},
+                    {"field": "identifier"},
+                    {"field": "name"},
+                    {"field": "cas"},
+                    {"field": "iupac_name"},
+                    {"field": "structural_comments"},
+                    {"field": "annotation_level"},
+                ],
+                "includes": [{"relation": "properties"}],
+                "page": 1,
+                "limit": 10,
             }
 
             response = self.session.post(
@@ -210,25 +228,23 @@ class CoconutService(BaseExternalService):
         """
         try:
             search_payload = {
-                "search": {
-                    "filters": [
-                        {"field": "identifier", "operator": "=", "value": identifier}
-                    ],
-                    "selects": [
-                        {"field": "standard_inchi"},
-                        {"field": "standard_inchi_key"},
-                        {"field": "canonical_smiles"},
-                        {"field": "identifier"},
-                        {"field": "name"},
-                        {"field": "cas"},
-                        {"field": "iupac_name"},
-                        {"field": "structural_comments"},
-                        {"field": "annotation_level"},
-                    ],
-                    "includes": [{"relation": "properties"}],
-                    "page": 1,
-                    "limit": 1,
-                }
+                "filters": [
+                    {"field": "identifier", "operator": "=", "value": identifier}
+                ],
+                "selects": [
+                    {"field": "standard_inchi"},
+                    {"field": "standard_inchi_key"},
+                    {"field": "canonical_smiles"},
+                    {"field": "identifier"},
+                    {"field": "name"},
+                    {"field": "cas"},
+                    {"field": "iupac_name"},
+                    {"field": "structural_comments"},
+                    {"field": "annotation_level"},
+                ],
+                "includes": [{"relation": "properties"}],
+                "page": 1,
+                "limit": 1,
             }
 
             response = self.session.post(
@@ -269,17 +285,15 @@ class CoconutService(BaseExternalService):
                 filters.append({"field": "rank", "operator": "=", "value": rank})
 
             search_payload = {
-                "search": {
-                    "filters": filters,
-                    "selects": [
-                        {"field": "name"},
-                        {"field": "iri"},
-                        {"field": "rank"},
-                        {"field": "molecule_count"},
-                    ],
-                    "page": 1,
-                    "limit": 10,
-                }
+                "filters": filters,
+                "selects": [
+                    {"field": "name"},
+                    {"field": "iri"},
+                    {"field": "rank"},
+                    {"field": "molecule_count"},
+                ],
+                "page": 1,
+                "limit": 10,
             }
 
             response = self.session.post(
@@ -395,6 +409,7 @@ class CoconutService(BaseExternalService):
                 inchikey=coconut_data.get("standard_inchi_key", ""),
                 pubchem_cid=None,  # Would need to cross-reference with PubChem
                 chembl_id=None,  # Would need to cross-reference with ChEMBL
+                drugbank_id=None,  # Would need to cross-reference with DrugBank
                 logp=logp,
                 polar_surface_area=psa,
                 known_activities=[],  # Would need additional processing
@@ -419,8 +434,29 @@ class CoconutService(BaseExternalService):
             bool: True if service is available, False otherwise
         """
         try:
-            response = self._make_request("health")
-            return response is not None and response.get("status") == "ok"
+            # Try a simple molecule search instead of health endpoint
+            search_payload = {
+                "search": {
+                    "filters": [{"field": "name", "operator": "like", "value": "%"}],
+                    "selects": [{"field": "name"}],
+                    "page": "1",  # API expects string values
+                    "limit": "1",  # API expects string values
+                }
+            }
+
+            response = self.session.post(
+                f"{self.BASE_URL}/molecules/search", json=search_payload
+            )
+
+            if response.status_code == 200:
+                self.logger.info("COCONUT service is available and authenticated")
+                return True
+            else:
+                self.logger.error(
+                    f"COCONUT service check failed with status {response.status_code}"
+                )
+                return False
+
         except Exception as e:
             self.logger.error(f"Health check failed: {str(e)}")
             return False
